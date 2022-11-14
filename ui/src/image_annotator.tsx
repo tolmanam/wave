@@ -4,6 +4,7 @@ import React from 'react'
 import { stylesheet } from 'typestyle'
 import { getPolygonPointCursor, isIntersectingPolygon, PolygonAnnotator } from './image_annotator_polygon'
 import { getRectCornerCursor, isIntersectingRect, RectAnnotator } from './image_annotator_rect'
+import { eventToCursor } from './parts/annotator_utils'
 import { AnnotatorTags } from './text_annotator'
 import { clas, cssVar, cssVarValue, px, rgb } from './theme'
 import { wave } from './ui'
@@ -110,7 +111,6 @@ const
       margin: 8
     }
   }),
-  eventToCursor = (event: React.MouseEvent, rect: DOMRect) => ({ cursor_x: event.clientX - rect.left, cursor_y: event.clientY - rect.top }),
   getIntersectedShape = (shapes: DrawnShape[], cursor_x: F, cursor_y: F) => shapes.find(({ shape, isFocused }) => {
     if (shape.rect) return isIntersectingRect(cursor_x, cursor_y, shape.rect, isFocused)
     if (shape.polygon) return isIntersectingPolygon({ x: cursor_x, y: cursor_y }, shape.polygon.vertices, isFocused)

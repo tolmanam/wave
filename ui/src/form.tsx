@@ -60,6 +60,7 @@ import { VegaVisualization, XVegaVisualization } from './vega'
 import { Menu, XMenu } from './menu'
 import { XTags, Tags } from './tags'
 import { TimePicker, XTimePicker } from './time_picker'
+import { AudioAnnotator, XAudioAnnotator } from './audio_annotator'
 
 /** Create a component. */
 export interface Component {
@@ -153,6 +154,8 @@ export interface Component {
   text_annotator?: TextAnnotator
   /** Image annotator. */
   image_annotator?: ImageAnnotator
+  /** Audio annotator. */
+  audio_annotator?: AudioAnnotator
   /** Facepile. */
   facepile?: Facepile
   /** Copyable text. */
@@ -291,6 +294,7 @@ const
     if (m.persona) return <XPersona model={m.persona} />
     if (m.text_annotator) return <XTextAnnotator model={m.text_annotator} />
     if (m.image_annotator) return <XImageAnnotator model={m.image_annotator} />
+    if (m.audio_annotator) return <XAudioAnnotator model={m.audio_annotator} />
     if (m.mini_button) return <XMiniButton model={m.mini_button} />
     if (m.mini_buttons) return <XMiniButtons model={m.mini_buttons} />
     if (m.facepile) return <XFacepile model={m.facepile} />

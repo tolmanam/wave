@@ -2484,6 +2484,77 @@ def image_annotator(
     ))
 
 
+def audio_annotator_tag(
+        name: str,
+        label: str,
+        color: str,
+) -> AudioAnnotatorTag:
+    """Create a unique tag type for use in an audio annotator.
+
+    Args:
+        name: An identifying name for this tag.
+        label: Text to be displayed for the annotation.
+        color: Hex or RGB color string to be used as the background color.
+    Returns:
+        A `h2o_wave.types.AudioAnnotatorTag` instance.
+    """
+    return AudioAnnotatorTag(
+        name,
+        label,
+        color,
+    )
+
+
+def audio_annotator_item(
+        range_from: float,
+        range_to: float,
+        tag: str,
+) -> AudioAnnotatorItem:
+    """Create an annotator item with initial selected tags or no tags.
+
+    Args:
+        range_from: The start of the audio annotation in seconds.
+        range_to: The end of the audio annotation in seconds.
+        tag: The `name` of the audio annotator tag to refer to for the `label` and `color` of this item.
+    Returns:
+        A `h2o_wave.types.AudioAnnotatorItem` instance.
+    """
+    return AudioAnnotatorItem(
+        range_from,
+        range_to,
+        tag,
+    )
+
+
+def audio_annotator(
+        name: str,
+        src: str,
+        tags: List[AudioAnnotatorTag],
+        items: Optional[List[AudioAnnotatorItem]] = None,
+        trigger: Optional[bool] = None,
+) -> Component:
+    """Create an audio annotator component.
+
+    This component allows annotating and labeling parts of audio file.
+
+    Args:
+        name: An identifying name for this component.
+        src: The source of the audio. We advise using mp3 or wav formats to achieve the best cross-browser experience. See https://caniuse.com/?search=audio%20format for other formats.
+        tags: The master list of tags that can be used for annotations.
+        items: Annotations to display on the image, if any.
+        trigger: True if the form should be submitted as soon as an annotation is made.
+    Returns:
+        A `h2o_wave.types.AudioAnnotator` instance.
+    """
+    return Component(audio_annotator=AudioAnnotator(
+        name,
+        src,
+        tags,
+        items,
+        trigger,
+    ))
+
+
 def facepile(
         items: List[Component],
         name: Optional[str] = None,
