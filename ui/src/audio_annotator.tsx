@@ -2,7 +2,6 @@ import * as Fluent from '@fluentui/react'
 import { B, F, Id, Rec, S, U } from 'h2o-wave'
 import React from 'react'
 import { stylesheet } from 'typestyle'
-import { Position } from './image_annotator'
 import { isIntersectingRect } from './image_annotator_rect'
 import { eventToCursor } from './parts/annotator_utils'
 import { MicroBars } from './parts/microbars'
@@ -63,6 +62,7 @@ type DrawnAudioAnnotatorItem = AudioAnnotatorItem & {
   canvasY: U,
   isFocused?: B
 }
+type DraggedAnnotation = { from: U, to: U, dragging: B }
 type TooltipProps = { title: S, range: S, top: U, left: U }
 type TagColor = { transparent: S, color: S, label: S }
 
@@ -89,7 +89,8 @@ const
     annotatorContainer: {
       width: '100%',
       height: WAVEFORM_HEIGHT,
-      position: 'relative'
+      position: 'relative',
+      marginTop: 15
     },
     annotatorCanvas: {
       position: 'absolute',
@@ -136,17 +137,17 @@ const
     const
       canvasRef = React.useRef<HTMLCanvasElement>(null),
       ctxRef = React.useRef<CanvasRenderingContext2D | null>(null),
-      startPosition = React.useRef<Position | undefined>(undefined),
+      tmpAnnotation = React.useRef<DraggedAnnotation | undefined>(undefined),
       [tooltipProps, setTooltipProps] = React.useState<TooltipProps | null>(null),
+      theme = Fluent.useTheme(),
       colorsMap = React.useMemo(() => new Map<S, TagColor>(tags.map(tag => {
-        // TODO: Will not work when palette colors are used and theme changes.
         const [R, G, B] = rgb(cssVarValue(tag.color))
         return [tag.name, {
           transparent: `rgba(${R}, ${G}, ${B}, 0.5)`,
           color: cssVarValue(tag.color),
           label: tag.label
         }]
-      })), [tags]),
+      })), [tags, theme]),
       getMaxDepth = (idx: U, annotation: DrawnAudioAnnotatorItem, currMax: U) => {
         // TODO: Super ugly perf-wise.
         let currmax = annotations.filter(a => annotation.from >= a.from && annotation.from <= a.to).length
@@ -163,7 +164,7 @@ const
           // TODO: Super ugly perf-wise.
           const intersections = annotations.filter(a => a !== annotation && isAnnotationIntersecting(a, annotation))
           const bottomIntersections = intersections.filter(a => a !== annotation && a.from >= annotation.from && a.from <= annotation.to).length
-          // const maxDepth = Math.max(bottomIntersections, getMaxDepth(i, annotation, 1))
+          // TODO: Add memoization.
           const maxDepth = getMaxDepth(i, annotation, 1)
           const shouldFillRemainingSpace = !bottomIntersections || maxDepth < currMaxDepth
           currMaxDepth = Math.max(currMaxDepth, maxDepth)
@@ -184,7 +185,6 @@ const
 
             annotation.canvasY = canvasY
           } else {
-
             const verticalIntersections = intersections
               .filter(a => a !== annotation && annotation.from >= a.from && annotation.from <= a.to)
               .sort((a, b) => a.canvasY - b.canvasY)
@@ -215,18 +215,24 @@ const
           }
         })
 
+        if (tmpAnnotation.current) {
+          const { from, to } = tmpAnnotation.current
+          ctx.fillStyle = colorsMap.get(activeTag)?.transparent || 'red'
+          ctx.fillRect(from, 0, to - from, WAVEFORM_HEIGHT)
+        }
+
         // Draw track.
         const trackPosition = canvas.width * percentPlayed
+        // TODO: Change to normal color.
         ctx.fillStyle = cssVarValue('$red')
         ctx.fillRect(trackPosition, 0, TRACK_WIDTH, WAVEFORM_HEIGHT)
       },
       onMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-        if (e.button !== 0) return // Ignore right-click.
+        if (e.buttons !== 1) return // Accept left-click only.
         const canvas = canvasRef.current
         if (!canvas) return
-
-        const { cursor_x, cursor_y } = eventToCursor(e, canvas.getBoundingClientRect())
-        startPosition.current = { x: cursor_x, y: cursor_y, dragging: false }
+        const from = eventToCursor(e, canvas.getBoundingClientRect()).cursor_x
+        tmpAnnotation.current = { from, to: from, dragging: false }
       },
       onMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
         const canvas = canvasRef.current
@@ -242,19 +248,15 @@ const
           left: cursor_x + LEFT_TOOLTIP_OFFSET
         })
 
-        if (!startPosition.current) return
-        startPosition.current = { ...startPosition.current, dragging: e.buttons === 1 }
+        if (!tmpAnnotation.current || e.buttons !== 1) return
 
-        const { from, to } = createAnnotation(startPosition.current.x, cursor_x, activeTag)
-        if (e.buttons !== 1) return
+        const { from, to } = createAnnotation(tmpAnnotation.current.from, cursor_x, activeTag)
+        tmpAnnotation.current = { from, to, dragging: true }
         redrawAnnotations()
 
         canvas.style.cursor = 'ew-resize'
-        const { transparent, label } = colorsMap.get(activeTag)!
-        ctx.fillStyle = transparent
-        ctx.fillRect(from, 0, to - from, WAVEFORM_HEIGHT)
         setTooltipProps({
-          title: label,
+          title: colorsMap.get(activeTag)!.label,
           range: `${formatTime(from / canvas.width * duration)} - ${formatTime(to / canvas.width * duration)}`,
           top: cursor_y + TOP_TOOLTIP_OFFSET,
           left: cursor_x + LEFT_TOOLTIP_OFFSET
@@ -273,17 +275,18 @@ const
         redrawAnnotations()
 
         const { cursor_x, cursor_y } = eventToCursor(e, canvas.getBoundingClientRect())
-        if (!startPosition.current?.dragging) {
+        if (!tmpAnnotation.current?.dragging) {
           const intersected = getIntersectedAnnotation(annotations, cursor_x, cursor_y)
           intersected ? focusAnnotation(intersected) : skipToTime(e)
           return
         }
 
-        const annotationWidth = Math.abs(startPosition.current.x - cursor_x)
+        const annotationWidth = Math.abs(tmpAnnotation.current.from - cursor_x)
         if (annotationWidth < MIN_ANNOTATION_WIDTH) return
 
-        onAnnotate(createAnnotation(startPosition.current.x, cursor_x, activeTag))
-        startPosition.current = undefined
+        onAnnotate(createAnnotation(tmpAnnotation.current.from, cursor_x, activeTag))
+        tmpAnnotation.current = undefined
+        redrawAnnotations()
         canvas.style.cursor = 'pointer'
       },
       init = () => {
@@ -300,15 +303,21 @@ const
         focused.tag = activeTag
         redrawAnnotations()
       }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeTag])
     React.useEffect(() => {
       recalculateAnnotations()
       redrawAnnotations()
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [annotations])
+
     React.useEffect(() => {
       const timeout = init()
       return () => window.clearTimeout(timeout)
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     React.useEffect(redrawAnnotations, [percentPlayed])
 
     return (
@@ -434,6 +443,7 @@ export const XAudioAnnotator = ({ model }: { model: AudioAnnotator }) => {
     reset = () => setAnnotations([]),
     removeAnnotation = () => setAnnotations(prev => prev.filter(a => !a.isFocused)),
     focusAnnotation = (annotation: DrawnAudioAnnotatorItem) => {
+      if (annotation.tag !== activeTag) setActiveTag(annotation.tag)
       setAnnotations(prev => prev.map(a => {
         a.isFocused = a === annotation
         return a
