@@ -133,6 +133,21 @@ const
   getIntersectedAnnotation = (annotations: DrawnAudioAnnotatorItem[], x: U, y: U) => {
     return annotations.find(a => isIntersectingRect(x, y, { x1: a.from, x2: a.to, y1: a.canvasY, y2: a.canvasHeight + a.canvasY }))
   },
+  getCanvasDimensions = (intersections: DrawnAudioAnnotatorItem[], annotation: DrawnAudioAnnotatorItem, maxDepth?: U) => {
+    const verticalIntersections = intersections
+      .filter(a => a !== annotation && annotation.from >= a.from && annotation.from <= a.to)
+      .sort((a, b) => a.canvasY - b.canvasY)
+    let canvasY = 0
+    let j = 0
+    while (canvasY === verticalIntersections[j]?.canvasY) {
+      canvasY += verticalIntersections[j].canvasHeight
+      j++
+    }
+    const canvasHeight = maxDepth
+      ? WAVEFORM_HEIGHT / maxDepth
+      : Math.abs(canvasY - (verticalIntersections[j]?.canvasY || WAVEFORM_HEIGHT))
+    return { canvasY, canvasHeight }
+  },
   CanvasAnnotator = ({ onAnnotate, activeTag, tags, percentPlayed, skipToTime, annotations, focusAnnotation, duration }: CanvasAnnotator) => {
     const
       canvasRef = React.useRef<HTMLCanvasElement>(null),
@@ -167,37 +182,11 @@ const
           // TODO: Add memoization.
           const maxDepth = getMaxDepth(i, annotation, 1)
           const shouldFillRemainingSpace = !bottomIntersections || maxDepth < currMaxDepth
-          currMaxDepth = Math.max(currMaxDepth, maxDepth)
-          if (!intersections.length) currMaxDepth = 1
+          currMaxDepth = intersections.length ? Math.max(currMaxDepth, maxDepth) : 1
 
-          if (!shouldFillRemainingSpace) {
-            annotation.canvasHeight = WAVEFORM_HEIGHT / maxDepth
-
-            const verticalIntersections = intersections
-              .filter(a => a !== annotation && annotation.from >= a.from && annotation.from <= a.to)
-              .sort((a, b) => a.canvasY - b.canvasY)
-            let canvasY = 0
-            let j = 0
-            while (canvasY === verticalIntersections[j]?.canvasY) {
-              canvasY += verticalIntersections[j].canvasHeight
-              j++
-            }
-
-            annotation.canvasY = canvasY
-          } else {
-            const verticalIntersections = intersections
-              .filter(a => a !== annotation && annotation.from >= a.from && annotation.from <= a.to)
-              .sort((a, b) => a.canvasY - b.canvasY)
-            let canvasY = 0
-            let j = 0
-            while (verticalIntersections[j] && canvasY === verticalIntersections[j].canvasY) {
-              canvasY += verticalIntersections[j].canvasHeight
-              j++
-            }
-
-            annotation.canvasHeight = Math.abs(canvasY - (verticalIntersections[j]?.canvasY || WAVEFORM_HEIGHT))
-            annotation.canvasY = canvasY
-          }
+          const { canvasY, canvasHeight } = getCanvasDimensions(intersections, annotation, shouldFillRemainingSpace ? 0 : maxDepth)
+          annotation.canvasY = canvasY
+          annotation.canvasHeight = canvasHeight
         }
       },
       redrawAnnotations = () => {
