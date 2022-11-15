@@ -47,7 +47,7 @@ export interface AudioAnnotator {
   trigger?: B
 }
 
-type CanvasAnnotator = {
+type RangeAnnotator = {
   annotations: DrawnAudioAnnotatorItem[]
   onAnnotate: (annotation?: DrawnAudioAnnotatorItem) => void
   activeTag: S
@@ -159,7 +159,7 @@ const
     return { canvasY, canvasHeight }
   },
   fromDrawnToAnnotatorItem = ({ from, to, tag }: DrawnAudioAnnotatorItem) => ({ from, to, tag }),
-  CanvasAnnotator = ({ onAnnotate, activeTag, tags, percentPlayed, skipToTime, annotations, focusAnnotation, duration }: CanvasAnnotator) => {
+  RangeAnnotator = ({ onAnnotate, activeTag, tags, percentPlayed, skipToTime, annotations, focusAnnotation, duration }: RangeAnnotator) => {
     const
       canvasRef = React.useRef<HTMLCanvasElement>(null),
       ctxRef = React.useRef<CanvasRenderingContext2D | null>(null),
@@ -539,7 +539,7 @@ export const XAudioAnnotator = ({ model }: { model: AudioAnnotator }) => {
             <AnnotatorTags tags={model.tags} activateTag={activateTag} activeTag={activeTag} />
             <div className={css.annotatorContainer}>
               <MicroBars data={waveFormData} value='val' category='cat' color='$themePrimary' zeroValue={0} />
-              <CanvasAnnotator
+              <RangeAnnotator
                 annotations={annotations}
                 onAnnotate={onAnnotate}
                 activeTag={activeTag}
