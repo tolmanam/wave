@@ -49,7 +49,7 @@ export interface AudioAnnotator {
 
 type CanvasAnnotator = {
   annotations: DrawnAudioAnnotatorItem[]
-  onAnnotate: (annotation: DrawnAudioAnnotatorItem) => void
+  onAnnotate: (annotation?: DrawnAudioAnnotatorItem) => void
   activeTag: S
   tags: AudioAnnotatorTag[]
   percentPlayed: F
@@ -325,19 +325,21 @@ const
           return
         }
 
+        let newAnnotation
         if (action === 'new') {
           const annotationWidth = Math.abs(currDrawnAnnotation.current.from - cursor_x)
           if (annotationWidth < MIN_ANNOTATION_WIDTH) return
-          onAnnotate(createAnnotation(currDrawnAnnotation.current.from, cursor_x, activeTag))
+          newAnnotation = createAnnotation(currDrawnAnnotation.current.from, cursor_x, activeTag)
         }
         else if (action === 'resize-from' || action === 'resize-to') {
           const resized = currDrawnAnnotation.current.intersected
           if (resized) {
-            const { from, to } = currDrawnAnnotation.current
-            currDrawnAnnotation.current.from = Math.min(from, to)
-            currDrawnAnnotation.current.to = Math.max(from, to)
+            const { from, to } = resized
+            resized.from = Math.min(from, to)
+            resized.to = Math.max(from, to)
           }
         }
+        onAnnotate(newAnnotation)
 
         currDrawnAnnotation.current = undefined
         if (action === 'move' || action === 'resize-from' || action === 'resize-to') recalculateAnnotations()
@@ -377,6 +379,7 @@ const
     return (
       <>
         <div
+          data-test='audio-annotator-tooltip'
           className={css.tooltip}
           style={{ display: tooltipProps ? 'block' : 'none', left: tooltipProps?.left, top: tooltipProps?.top }}
         >
@@ -493,9 +496,9 @@ export const XAudioAnnotator = ({ model }: { model: AudioAnnotator }) => {
       setCurrentTime(newTime)
       audioRef.current.currentTime = newTime
     },
-    onAnnotate = (newAnnotation: DrawnAudioAnnotatorItem) => {
+    onAnnotate = (newAnnotation?: DrawnAudioAnnotatorItem) => {
       setAnnotations(prev => {
-        const newAnnotations = [...prev, newAnnotation]
+        const newAnnotations = newAnnotation ? [...prev, newAnnotation] : prev
         newAnnotations.sort((a, b) => a.from - b.from)
         wave.args[model.name] = newAnnotations.map(fromDrawnToAnnotatorItem) as unknown as Rec[]
         return newAnnotations

@@ -32,7 +32,7 @@ const
     ],
     items
   },
-  waitForLoad = async () => act(() => new Promise(res => setTimeout(() => res(), 20)))
+  waitForComponentLoad = async () => act(() => new Promise(res => setTimeout(() => res(), 20)))
 
 class MockAudioContext {
   createGain = () => ({ gain: {} })
@@ -55,25 +55,25 @@ describe('AudioAnnotator.tsx', () => {
 
   it('Renders data-test attr', async () => {
     const { queryByTestId } = render(<XAudioAnnotator model={model} />)
-    await waitForLoad()
+    await waitForComponentLoad()
     expect(queryByTestId(name)).toBeInTheDocument()
   })
 
   it('Sets annotation args - empty ', async () => {
     render(<XAudioAnnotator model={{ ...model, items: undefined }} />)
-    await waitForLoad()
+    await waitForComponentLoad()
     expect(wave.args[name]).toMatchObject([])
   })
 
   it('Sets annotation args ', async () => {
     render(<XAudioAnnotator model={model} />)
-    await waitForLoad()
+    await waitForComponentLoad()
     expect(wave.args[name]).toMatchObject(items)
   })
 
   it('Displays correct cursor when hovering over canvas - no intersection', async () => {
     const { container } = render(<XAudioAnnotator model={model} />)
-    await waitForLoad()
+    await waitForComponentLoad()
     const canvasEl = container.querySelector('canvas')!
     fireEvent.mouseMove(canvasEl, { clientX: 25, clientY: 25 })
     expect(canvasEl.style.cursor).toBe('pointer')
@@ -81,7 +81,7 @@ describe('AudioAnnotator.tsx', () => {
 
   it('Removes all shapes after clicking reset', async () => {
     const { getByTitle } = render(<XAudioAnnotator model={model} />)
-    await waitForLoad()
+    await waitForComponentLoad()
     expect(wave.args[name]).toMatchObject(items)
     fireEvent.click(getByTitle('reset audio annotator'))
     expect(wave.args[name]).toMatchObject([])
@@ -90,7 +90,7 @@ describe('AudioAnnotator.tsx', () => {
   describe('Annotations', () => {
     it('Draws a new annotation', async () => {
       const { container } = render(<XAudioAnnotator model={model} />)
-      await waitForLoad()
+      await waitForComponentLoad()
       const canvasEl = container.querySelector('canvas')!
       fireEvent.mouseDown(canvasEl, { clientX: 30, clientY: 10, buttons: 1 })
       fireEvent.mouseMove(canvasEl, { clientX: 40, clientY: 20, buttons: 1 })
@@ -100,9 +100,21 @@ describe('AudioAnnotator.tsx', () => {
       expect(wave.args[name]).toMatchObject([items[0], { tag: 'tag1', from: 30, to: 40 }, items[1]])
     })
 
+    it('Does not draw a new annotation if too small', async () => {
+      const { container } = render(<XAudioAnnotator model={model} />)
+      await waitForComponentLoad()
+      const canvasEl = container.querySelector('canvas')!
+      fireEvent.mouseDown(canvasEl, { clientX: 30, clientY: 10, buttons: 1 })
+      fireEvent.mouseMove(canvasEl, { clientX: 31, clientY: 20, buttons: 1 })
+      fireEvent.click(canvasEl, { clientX: 31, clientY: 20, buttons: 1 })
+
+      expect(wave.args[name]).toHaveLength(2)
+      expect(wave.args[name]).toMatchObject(items)
+    })
+
     it('Does not draw a new annotation if left mouse click not pressed', async () => {
       const { container } = render(<XAudioAnnotator model={model} />)
-      await waitForLoad()
+      await waitForComponentLoad()
       const canvasEl = container.querySelector('canvas')!
       fireEvent.mouseDown(canvasEl, { clientX: 10, clientY: 10 })
       fireEvent.mouseMove(canvasEl, { clientX: 20, clientY: 20 })
@@ -114,7 +126,7 @@ describe('AudioAnnotator.tsx', () => {
 
     it('Draws a new annotation with different tag if selected', async () => {
       const { container, getByText } = render(<XAudioAnnotator model={model} />)
-      await waitForLoad()
+      await waitForComponentLoad()
       fireEvent.click(getByText('Tag 2'))
       const canvasEl = container.querySelector('canvas')!
       fireEvent.mouseDown(canvasEl, { clientX: 30, clientY: 10, buttons: 1 })
@@ -127,7 +139,7 @@ describe('AudioAnnotator.tsx', () => {
 
     it('Removes annotation after clicking remove btn', async () => {
       const { container, getByTitle } = render(<XAudioAnnotator model={model} />)
-      await waitForLoad()
+      await waitForComponentLoad()
       const canvasEl = container.querySelector('canvas')!
       expect(wave.args[name]).toMatchObject(items)
 
@@ -143,7 +155,7 @@ describe('AudioAnnotator.tsx', () => {
 
     it('Changes tag when clicked existing annotation', async () => {
       const { container, getByText } = render(<XAudioAnnotator model={model} />)
-      await waitForLoad()
+      await waitForComponentLoad()
       const canvasEl = container.querySelector('canvas')!
       fireEvent.click(canvasEl, { clientX: 3, clientY: 3 })
       fireEvent.click(getByText('Tag 2'))
@@ -151,38 +163,53 @@ describe('AudioAnnotator.tsx', () => {
       expect(wave.args[name]).toMatchObject([{ ...items[0], tag: 'tag2' }, items[1]])
     })
 
-    it('Displays the annotation cursor when hovering over annotation', async () => {
+    it('Displays the correct cursor when hovering over annotation', async () => {
       const { container } = render(<XAudioAnnotator model={model} />)
-      await waitForLoad()
+      await waitForComponentLoad()
       const canvasEl = container.querySelector('canvas')!
       fireEvent.mouseMove(canvasEl, { clientX: 3, clientY: 3 })
       expect(canvasEl.style.cursor).toBe('pointer')
-      fireEvent.mouseMove(canvasEl, { clientX: 15, clientY: 3 })
-      expect(canvasEl.style.cursor).toBe('pointer')
-      fireEvent.mouseMove(canvasEl, { clientX: 20, clientY: 3 })
-      fireEvent.click(canvasEl, { clientX: 20, clientY: 3 })
-      fireEvent.mouseMove(canvasEl, { clientX: 12, clientY: 3 })
-      expect(canvasEl.style.cursor).toBe('pointer')
+    })
+
+    it('Displays move cursor when hovering over focused annotation', async () => {
+      const { container } = render(<XAudioAnnotator model={model} />)
+      await waitForComponentLoad()
+      const canvasEl = container.querySelector('canvas')!
+      fireEvent.click(canvasEl, { clientX: 5, clientY: 3, buttons: 1 })
+      expect(canvasEl.style.cursor).toBe('move')
+      fireEvent.mouseMove(canvasEl, { clientX: 15, clientY: 3, buttons: 1 })
+      expect(canvasEl.style.cursor).toBe('move')
+    })
+
+    it('Displays resize cursor when resizing focused annotation', async () => {
+      const { container } = render(<XAudioAnnotator model={model} />)
+      await waitForComponentLoad()
+      const canvasEl = container.querySelector('canvas')!
+      fireEvent.click(canvasEl, { clientX: 20, clientY: 3, buttons: 1 })
+      expect(canvasEl.style.cursor).toBe('ew-resize')
+      fireEvent.mouseDown(canvasEl, { clientX: 20, clientY: 3, buttons: 1 })
+      fireEvent.mouseMove(canvasEl, { clientX: 30, clientY: 3, buttons: 1 })
+      expect(canvasEl.style.cursor).toBe('ew-resize')
     })
 
     it('Displays move cursor when dragging the focused annotation', async () => {
       const { container } = render(<XAudioAnnotator model={model} />)
-      await waitForLoad()
+      await waitForComponentLoad()
       const canvasEl = container.querySelector('canvas')!
       fireEvent.mouseMove(canvasEl, { clientX: 3, clientY: 3 })
-      fireEvent.click(canvasEl, { clientX: 3, clientY: 3 })
       expect(canvasEl.style.cursor).toBe('pointer')
-      fireEvent.mouseDown(canvasEl, { clientX: 3, clientY: 3, buttons: 1 })
-      fireEvent.mouseMove(canvasEl, { clientX: 4, clientY: 4, buttons: 1 })
+      fireEvent.click(canvasEl, { clientX: 10, clientY: 10 })
+      expect(canvasEl.style.cursor).toBe('move')
+      fireEvent.mouseDown(canvasEl, { clientX: 10, clientY: 3, buttons: 1 })
+      fireEvent.mouseMove(canvasEl, { clientX: 15, clientY: 4, buttons: 1 })
       expect(canvasEl.style.cursor).toBe('move')
       fireEvent.mouseMove(canvasEl, { clientX: 30, clientY: 5 })
-      fireEvent.click(canvasEl, { clientX: 30, clientY: 5 })
       expect(canvasEl.style.cursor).toBe('pointer')
     })
 
-    it.only('Displays resize cursor when dragging the focused annotation', async () => {
+    it('Displays resize cursor when dragging the focused annotation', async () => {
       const { container } = render(<XAudioAnnotator model={model} />)
-      await waitForLoad()
+      await waitForComponentLoad()
       const canvasEl = container.querySelector('canvas')!
       fireEvent.mouseMove(canvasEl, { clientX: 20, clientY: 3 })
       expect(canvasEl.style.cursor).toBe('pointer')
@@ -197,54 +224,155 @@ describe('AudioAnnotator.tsx', () => {
       expect(canvasEl.style.cursor).toBe('pointer')
     })
 
-    it('Moves annotation', () => {
+    it('Moves annotation', async () => {
       const { container } = render(<XAudioAnnotator model={model} />)
+      await waitForComponentLoad()
+      expect(wave.args[name]).toMatchObject(items)
       const canvasEl = container.querySelector('canvas')!
-      fireEvent.click(canvasEl, { clientX: 50, clientY: 50 })
-      fireEvent.mouseDown(canvasEl, { clientX: 50, clientY: 50 })
-      fireEvent.mouseMove(canvasEl, { clientX: 60, clientY: 60, buttons: 1 })
-      fireEvent.click(canvasEl, { clientX: 60, clientY: 60 })
+      const moveOffset = 5
+      fireEvent.click(canvasEl, { clientX: 10, clientY: 50 })
+      fireEvent.mouseDown(canvasEl, { clientX: 10, clientY: 50, buttons: 1 })
+      fireEvent.mouseMove(canvasEl, { clientX: 10 + moveOffset, clientY: 60, buttons: 1 })
+      fireEvent.click(canvasEl, { clientX: 10 + moveOffset, clientY: 60 })
 
-      expect(wave.args[name]).toMatchObject([{ tag: 'person', shape: { annotation: { x1: 20, x2: 110, y1: 20, y2: 110 } } }, polygon])
+      const { from, to } = items[0]
+      expect(wave.args[name]).toMatchObject([{ ...items[0], from: from + moveOffset, to: to + moveOffset }, items[1]])
     })
 
-    it('Does not move annotation if left mouse btn not pressed (dragging)', () => {
+    it('Does not move annotation if left mouse btn not pressed (dragging)', async () => {
       const { container } = render(<XAudioAnnotator model={model} />)
+      await waitForComponentLoad()
       const canvasEl = container.querySelector('canvas')!
-      fireEvent.click(canvasEl, { clientX: 50, clientY: 50 })
-      fireEvent.mouseDown(canvasEl, { clientX: 50, clientY: 50 })
-      fireEvent.mouseMove(canvasEl, { clientX: 60, clientY: 60 })
-      fireEvent.click(canvasEl, { clientX: 60, clientY: 60 })
+      const moveOffset = 5
+      fireEvent.click(canvasEl, { clientX: 10, clientY: 50 })
+      fireEvent.mouseDown(canvasEl, { clientX: 10, clientY: 50 })
+      fireEvent.mouseMove(canvasEl, { clientX: 10 + moveOffset, clientY: 60 })
+      fireEvent.click(canvasEl, { clientX: 10 + moveOffset, clientY: 60 })
 
       expect(wave.args[name]).toMatchObject(items)
     })
 
-    it('Resizes top left corner properly', () => {
+    it('Resizes annotation from', async () => {
       const { container } = render(<XAudioAnnotator model={model} />)
+      await waitForComponentLoad()
+      expect(wave.args[name]).toMatchObject(items)
       const canvasEl = container.querySelector('canvas')!
-      fireEvent.click(canvasEl, { clientX: 50, clientY: 50 })
-      fireEvent.mouseDown(canvasEl, { clientX: 10, clientY: 10 })
-      fireEvent.mouseMove(canvasEl, { clientX: 5, clientY: 5, buttons: 1 })
-      fireEvent.click(canvasEl, { clientX: 5, clientY: 5 })
+      const moveOffset = 5
+      const { from } = items[1]
+      fireEvent.click(canvasEl, { clientX: 70, clientY: 50 })
+      fireEvent.mouseDown(canvasEl, { clientX: from, clientY: 50, buttons: 1 })
+      fireEvent.mouseMove(canvasEl, { clientX: from - moveOffset, clientY: 60, buttons: 1 })
+      fireEvent.click(canvasEl, { clientX: from - moveOffset, clientY: 60 })
 
-      expect(wave.args[name]).toMatchObject([
-        { tag: 'person', shape: { annotation: { x1: 5, x2: 100, y1: 5, y2: 100 } } },
-        polygon
-      ])
+      expect(wave.args[name]).toMatchObject([items[0], { ...items[1], from: from - moveOffset }])
     })
 
-    it('Resizes top right corner properly', () => {
+    it('Resizes annotation from and exceeds the "to"', async () => {
       const { container } = render(<XAudioAnnotator model={model} />)
+      await waitForComponentLoad()
+      expect(wave.args[name]).toMatchObject(items)
       const canvasEl = container.querySelector('canvas')!
-      fireEvent.click(canvasEl, { clientX: 50, clientY: 50 })
-      fireEvent.mouseDown(canvasEl, { clientX: 100, clientY: 10 })
-      fireEvent.mouseMove(canvasEl, { clientX: 105, clientY: 5, buttons: 1 })
-      fireEvent.click(canvasEl, { clientX: 5, clientY: 5 })
+      const { from, to } = items[1]
+      const moveOffset = to - from + 5
+      fireEvent.click(canvasEl, { clientX: 70, clientY: 50 })
+      fireEvent.mouseDown(canvasEl, { clientX: from, clientY: 50, buttons: 1 })
+      fireEvent.mouseMove(canvasEl, { clientX: from + moveOffset, clientY: 60, buttons: 1 })
+      fireEvent.click(canvasEl, { clientX: from + moveOffset, clientY: 60 })
 
-      expect(wave.args[name]).toMatchObject([
-        { tag: 'person', shape: { annotation: { x1: 10, x2: 105, y1: 5, y2: 100 } } },
-        polygon
-      ])
+      expect(wave.args[name]).toMatchObject([items[0], { ...items[1], from: to, to: to + 5 }])
+    })
+
+    it('Resizes annotation to', async () => {
+      const { container } = render(<XAudioAnnotator model={model} />)
+      await waitForComponentLoad()
+      expect(wave.args[name]).toMatchObject(items)
+      const canvasEl = container.querySelector('canvas')!
+      const moveOffset = 5
+      const { to } = items[0]
+      fireEvent.click(canvasEl, { clientX: 10, clientY: 50 })
+      fireEvent.mouseDown(canvasEl, { clientX: to, clientY: 50, buttons: 1 })
+      fireEvent.mouseMove(canvasEl, { clientX: to + moveOffset, clientY: 60, buttons: 1 })
+      fireEvent.click(canvasEl, { clientX: to + moveOffset, clientY: 60 })
+
+      expect(wave.args[name]).toMatchObject([{ ...items[0], to: to + moveOffset }, items[1]])
+    })
+
+    it('Resizes annotation to and exceeds the "from"', async () => {
+      const { container } = render(<XAudioAnnotator model={model} />)
+      await waitForComponentLoad()
+      expect(wave.args[name]).toMatchObject(items)
+      const canvasEl = container.querySelector('canvas')!
+      const { from, to } = items[1]
+      const moveOffset = to - from + 5
+      fireEvent.click(canvasEl, { clientX: 70, clientY: 50 })
+      fireEvent.mouseDown(canvasEl, { clientX: to, clientY: 50, buttons: 1 })
+      fireEvent.mouseMove(canvasEl, { clientX: to - moveOffset, clientY: 60, buttons: 1 })
+      fireEvent.click(canvasEl, { clientX: to - moveOffset, clientY: 60 })
+
+      expect(wave.args[name]).toMatchObject([items[0], { ...items[1], from: to - moveOffset, to: from }])
+    })
+
+  })
+
+  describe('Tooltip', () => {
+    it('Shows tooltip when hovering over annotation', async () => {
+      const { container, getByTestId } = render(<XAudioAnnotator model={model} />)
+      await waitForComponentLoad()
+      const canvasEl = container.querySelector('canvas')!
+      fireEvent.mouseMove(canvasEl, { clientX: 3, clientY: 3 })
+      expect(getByTestId('audio-annotator-tooltip')).toBeVisible()
+    })
+
+    it('Does not show tooltip when not hovering over annotation', async () => {
+      const { container, getByTestId } = render(<XAudioAnnotator model={model} />)
+      await waitForComponentLoad()
+      const canvasEl = container.querySelector('canvas')!
+      fireEvent.mouseMove(canvasEl, { clientX: 30, clientY: 3 })
+      expect(getByTestId('audio-annotator-tooltip')).not.toBeVisible()
+    })
+
+    it('Shows tooltip while drawing a new annotation', async () => {
+      const { container, getByTestId } = render(<XAudioAnnotator model={model} />)
+      await waitForComponentLoad()
+      const canvasEl = container.querySelector('canvas')!
+      fireEvent.mouseDown(canvasEl, { clientX: 30, clientY: 10, buttons: 1 })
+      fireEvent.mouseMove(canvasEl, { clientX: 40, clientY: 20, buttons: 1 })
+      expect(getByTestId('audio-annotator-tooltip')).toBeVisible()
+    })
+
+    it('Shows tooltip while moving an annotation', async () => {
+      const { container, getByTestId } = render(<XAudioAnnotator model={model} />)
+      await waitForComponentLoad()
+      const canvasEl = container.querySelector('canvas')!
+      const moveOffset = 5
+      fireEvent.click(canvasEl, { clientX: 10, clientY: 50 })
+      fireEvent.mouseDown(canvasEl, { clientX: 10, clientY: 50, buttons: 1 })
+      fireEvent.mouseMove(canvasEl, { clientX: 10 + moveOffset, clientY: 60, buttons: 1 })
+      expect(getByTestId('audio-annotator-tooltip')).toBeVisible()
+    })
+
+    it('Shows tooltip while resizing an annotation "from"', async () => {
+      const { container, getByTestId } = render(<XAudioAnnotator model={model} />)
+      await waitForComponentLoad()
+      const canvasEl = container.querySelector('canvas')!
+      const moveOffset = 5
+      const { from } = items[1]
+      fireEvent.click(canvasEl, { clientX: 70, clientY: 50 })
+      fireEvent.mouseDown(canvasEl, { clientX: from, clientY: 50, buttons: 1 })
+      fireEvent.mouseMove(canvasEl, { clientX: from - moveOffset, clientY: 60, buttons: 1 })
+      expect(getByTestId('audio-annotator-tooltip')).toBeVisible()
+    })
+
+    it('Shows tooltip while resizing an annotation "to"', async () => {
+      const { container, getByTestId } = render(<XAudioAnnotator model={model} />)
+      await waitForComponentLoad()
+      const canvasEl = container.querySelector('canvas')!
+      const moveOffset = 5
+      const { to } = items[0]
+      fireEvent.click(canvasEl, { clientX: 10, clientY: 50 })
+      fireEvent.mouseDown(canvasEl, { clientX: to, clientY: 50, buttons: 1 })
+      fireEvent.mouseMove(canvasEl, { clientX: to + moveOffset, clientY: 60, buttons: 1 })
+      expect(getByTestId('audio-annotator-tooltip')).toBeVisible()
     })
 
   })
