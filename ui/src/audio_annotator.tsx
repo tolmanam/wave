@@ -62,13 +62,19 @@ type DrawnAudioAnnotatorItem = AudioAnnotatorItem & {
   canvasY: U,
   isFocused?: B
 }
-type DraggedAnnotation = { from: U, to: U, dragging: B }
+type DraggedAnnotation = {
+  from: U,
+  to: U,
+  action?: 'resize-from' | 'resize-to' | 'move' | 'new',
+  intersected?: DrawnAudioAnnotatorItem
+}
 type TooltipProps = { title: S, range: S, top: U, left: U }
 type TagColor = { transparent: S, color: S, label: S }
 
 const
   WAVEFORM_HEIGHT = 200,
   MIN_ANNOTATION_WIDTH = 5,
+  ANNOTATION_HANDLE_OFFSET = 3,
   TOP_TOOLTIP_OFFSET = -75,
   LEFT_TOOLTIP_OFFSET = 25,
   TRACK_WIDTH = 5,
@@ -120,6 +126,10 @@ const
       .filter((v, i) => v !== "00" || i > 0)
       .join(":")
   },
+  getIntersectingEdge = (x: U, { from, to }: DrawnAudioAnnotatorItem) => {
+    if (Math.abs(from - x) <= ANNOTATION_HANDLE_OFFSET) return 'resize-from'
+    if (Math.abs(to - x) <= ANNOTATION_HANDLE_OFFSET) return 'resize-to'
+  },
   isAnnotationIntersecting = (a1: DrawnAudioAnnotatorItem, a2: DrawnAudioAnnotatorItem) => {
     return (a2.from >= a1.from && a2.from <= a1.to) || (a1.from >= a2.from && a1.from <= a2.to)
   },
@@ -148,11 +158,12 @@ const
       : Math.abs(canvasY - (verticalIntersections[j]?.canvasY || WAVEFORM_HEIGHT))
     return { canvasY, canvasHeight }
   },
+  fromDrawnToAnnotatorItem = ({ from, to, tag }: DrawnAudioAnnotatorItem) => ({ from, to, tag }),
   CanvasAnnotator = ({ onAnnotate, activeTag, tags, percentPlayed, skipToTime, annotations, focusAnnotation, duration }: CanvasAnnotator) => {
     const
       canvasRef = React.useRef<HTMLCanvasElement>(null),
       ctxRef = React.useRef<CanvasRenderingContext2D | null>(null),
-      tmpAnnotation = React.useRef<DraggedAnnotation | undefined>(undefined),
+      currDrawnAnnotation = React.useRef<DraggedAnnotation | undefined>(undefined),
       [tooltipProps, setTooltipProps] = React.useState<TooltipProps | null>(null),
       theme = Fluent.useTheme(),
       colorsMap = React.useMemo(() => new Map<S, TagColor>(tags.map(tag => {
@@ -162,6 +173,7 @@ const
           color: cssVarValue(tag.color),
           label: tag.label
         }]
+        // eslint-disable-next-line react-hooks/exhaustive-deps
       })), [tags, theme]),
       getMaxDepth = (idx: U, annotation: DrawnAudioAnnotatorItem, currMax: U) => {
         // TODO: Super ugly perf-wise.
@@ -204,8 +216,8 @@ const
           }
         })
 
-        if (tmpAnnotation.current) {
-          const { from, to } = tmpAnnotation.current
+        if (currDrawnAnnotation.current && currDrawnAnnotation.current.action === 'new') {
+          const { from, to } = currDrawnAnnotation.current
           ctx.fillStyle = colorsMap.get(activeTag)?.transparent || 'red'
           ctx.fillRect(from, 0, to - from, WAVEFORM_HEIGHT)
         }
@@ -220,8 +232,10 @@ const
         if (e.buttons !== 1) return // Accept left-click only.
         const canvas = canvasRef.current
         if (!canvas) return
-        const from = eventToCursor(e, canvas.getBoundingClientRect()).cursor_x
-        tmpAnnotation.current = { from, to: from, dragging: false }
+        const { cursor_x, cursor_y } = eventToCursor(e, canvas.getBoundingClientRect())
+        const intersected = getIntersectedAnnotation(annotations, cursor_x, cursor_y)
+        const action = intersected?.isFocused ? getIntersectingEdge(cursor_x, intersected) || 'move' : undefined
+        currDrawnAnnotation.current = { from: cursor_x, to: cursor_x, action, intersected }
       },
       onMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
         const canvas = canvasRef.current
@@ -237,16 +251,49 @@ const
           left: cursor_x + LEFT_TOOLTIP_OFFSET
         })
 
-        if (!tmpAnnotation.current || e.buttons !== 1) return
+        canvas.style.cursor = intersected?.isFocused
+          ? getIntersectingEdge(cursor_x, intersected) ? 'ew-resize' : 'move'
+          : 'pointer'
 
-        const { from, to } = createAnnotation(tmpAnnotation.current.from, cursor_x, activeTag)
-        tmpAnnotation.current = { from, to, dragging: true }
+        if (currDrawnAnnotation.current && !currDrawnAnnotation.current?.action && e.buttons === 1) {
+          currDrawnAnnotation.current.action = 'new'
+        }
+        else if (!currDrawnAnnotation.current || e.buttons !== 1) return
+
+        let tooltipFrom = 0
+        let tooltipTo = 0
+        const { action, intersected: currIntersected } = currDrawnAnnotation.current
+        if (action === 'new') {
+          const { from, to } = createAnnotation(currDrawnAnnotation.current.from, cursor_x, activeTag)
+          tooltipFrom = from
+          tooltipTo = to
+          currDrawnAnnotation.current = { from, to, action: 'new' }
+        }
+        else if (action === 'move' && currIntersected) {
+          const movedOffset = cursor_x - currDrawnAnnotation.current.from
+          currIntersected.from += movedOffset
+          currIntersected.to += movedOffset
+          tooltipFrom = currIntersected.from
+          tooltipTo = currIntersected.to
+          currDrawnAnnotation.current.from += movedOffset
+        }
+        else if (action === 'resize-from' && currIntersected) {
+          currIntersected.from = cursor_x
+          tooltipFrom = currIntersected.from
+          tooltipTo = currIntersected.to
+          canvas.style.cursor = 'ew-resize'
+        }
+        else if (action === 'resize-to' && currIntersected) {
+          currIntersected.to = cursor_x
+          tooltipFrom = currIntersected.from
+          tooltipTo = currIntersected.to
+          canvas.style.cursor = 'ew-resize'
+        }
+
         redrawAnnotations()
-
-        canvas.style.cursor = 'ew-resize'
         setTooltipProps({
           title: colorsMap.get(activeTag)!.label,
-          range: `${formatTime(from / canvas.width * duration)} - ${formatTime(to / canvas.width * duration)}`,
+          range: `${formatTime(tooltipFrom / canvas.width * duration)} - ${formatTime(tooltipTo / canvas.width * duration)}`,
           top: cursor_y + TOP_TOOLTIP_OFFSET,
           left: cursor_x + LEFT_TOOLTIP_OFFSET
         })
@@ -260,23 +307,41 @@ const
         const ctx = ctxRef.current
         if (!canvas || !ctx) return
 
-        annotations.forEach(a => a.isFocused = false)
-        redrawAnnotations()
+        const action = currDrawnAnnotation.current?.action
+        if (!action || action === 'new') {
+          annotations.forEach(a => a.isFocused = false)
+          redrawAnnotations()
+        }
 
         const { cursor_x, cursor_y } = eventToCursor(e, canvas.getBoundingClientRect())
-        if (!tmpAnnotation.current?.dragging) {
-          const intersected = getIntersectedAnnotation(annotations, cursor_x, cursor_y)
+        const intersected = getIntersectedAnnotation(annotations, cursor_x, cursor_y)
+
+        canvas.style.cursor = intersected
+          ? getIntersectingEdge(cursor_x, intersected) ? 'ew-resize' : 'move'
+          : 'pointer'
+
+        if (!currDrawnAnnotation.current || !action) {
           intersected ? focusAnnotation(intersected) : skipToTime(e)
           return
         }
 
-        const annotationWidth = Math.abs(tmpAnnotation.current.from - cursor_x)
-        if (annotationWidth < MIN_ANNOTATION_WIDTH) return
+        if (action === 'new') {
+          const annotationWidth = Math.abs(currDrawnAnnotation.current.from - cursor_x)
+          if (annotationWidth < MIN_ANNOTATION_WIDTH) return
+          onAnnotate(createAnnotation(currDrawnAnnotation.current.from, cursor_x, activeTag))
+        }
+        else if (action === 'resize-from' || action === 'resize-to') {
+          const resized = currDrawnAnnotation.current.intersected
+          if (resized) {
+            const { from, to } = currDrawnAnnotation.current
+            currDrawnAnnotation.current.from = Math.min(from, to)
+            currDrawnAnnotation.current.to = Math.max(from, to)
+          }
+        }
 
-        onAnnotate(createAnnotation(tmpAnnotation.current.from, cursor_x, activeTag))
-        tmpAnnotation.current = undefined
+        currDrawnAnnotation.current = undefined
+        if (action === 'move' || action === 'resize-from' || action === 'resize-to') recalculateAnnotations()
         redrawAnnotations()
-        canvas.style.cursor = 'pointer'
       },
       init = () => {
         // Set correct canvas coordinate system from default 300:150 since we resize canvas using CSS.
@@ -344,13 +409,20 @@ export const XAudioAnnotator = ({ model }: { model: AudioAnnotator }) => {
     [isPlaying, setIsPlaying] = React.useState(false),
     [duration, setDuration] = React.useState(0),
     [currentTime, setCurrentTime] = React.useState(0),
-    [annotations, setAnnotations] = React.useState<DrawnAudioAnnotatorItem[]>([]),
+    [annotations, setAnnotations] = React.useState<DrawnAudioAnnotatorItem[]>(model.items?.map(i => ({ ...i, canvasHeight: 0, canvasY: 0 })) || []),
     audioRef = React.useRef<HTMLAudioElement>(null),
     audioContextRef = React.useRef<AudioContext>(),
     gainNodeRef = React.useRef<GainNode>(),
     fetchedAudioUrlRef = React.useRef<S>(),
     audioPositionIntervalRef = React.useRef<U>(),
-    activateTag = (tagName: S) => () => setActiveTag(tagName),
+    activateTag = (tagName: S) => () => {
+      setActiveTag(tagName)
+      setAnnotations(prev => {
+        const newAnnotations = prev.map(a => { if (a.isFocused) a.tag = tagName; return a })
+        wave.args[model.name] = newAnnotations.map(fromDrawnToAnnotatorItem) as unknown as Rec[]
+        return newAnnotations
+      })
+    },
     // TODO: Move to a separate service worker.
     getAudioData = async () => {
       if (!audioRef.current) return
@@ -416,8 +488,8 @@ export const XAudioAnnotator = ({ model }: { model: AudioAnnotator }) => {
     onSpeedChange = (v: U) => { if (audioRef.current) audioRef.current.playbackRate = v },
     skipToTime = (e: React.MouseEvent<HTMLCanvasElement>) => {
       if (!audioRef.current) return
-      const xRelativeToCurrTarget = e.pageX - e.currentTarget.getBoundingClientRect().left
-      const newTime = xRelativeToCurrTarget / e.currentTarget.clientWidth * duration
+      const xRelativeToCurrTarget = (e.pageX || 0) - e.currentTarget.getBoundingClientRect().left
+      const newTime = xRelativeToCurrTarget / e.currentTarget.width * duration
       setCurrentTime(newTime)
       audioRef.current.currentTime = newTime
     },
@@ -425,18 +497,24 @@ export const XAudioAnnotator = ({ model }: { model: AudioAnnotator }) => {
       setAnnotations(prev => {
         const newAnnotations = [...prev, newAnnotation]
         newAnnotations.sort((a, b) => a.from - b.from)
-        wave.args[model.name] = newAnnotations as unknown as Rec[]
+        wave.args[model.name] = newAnnotations.map(fromDrawnToAnnotatorItem) as unknown as Rec[]
         return newAnnotations
       })
     },
-    reset = () => setAnnotations([]),
-    removeAnnotation = () => setAnnotations(prev => prev.filter(a => !a.isFocused)),
+    reset = () => {
+      setAnnotations([])
+      wave.args[model.name] = []
+    },
+    removeAnnotation = () => {
+      setAnnotations(prev => {
+        const newAnnotations = prev.filter(a => !a.isFocused)
+        wave.args[model.name] = newAnnotations.map(fromDrawnToAnnotatorItem) as unknown as Rec[]
+        return newAnnotations
+      })
+    },
     focusAnnotation = (annotation: DrawnAudioAnnotatorItem) => {
       if (annotation.tag !== activeTag) setActiveTag(annotation.tag)
-      setAnnotations(prev => prev.map(a => {
-        a.isFocused = a === annotation
-        return a
-      }))
+      setAnnotations(prev => prev.map(a => { a.isFocused = a === annotation; return a }))
     }
 
   React.useEffect(() => {
@@ -473,8 +551,13 @@ export const XAudioAnnotator = ({ model }: { model: AudioAnnotator }) => {
             <Fluent.Slider label='Volume' min={0} defaultValue={1} max={2} step={0.01} onChange={onVolumeChange} />
             <Fluent.IconButton iconProps={{ iconName: isPlaying ? 'Pause' : 'Play' }} onClick={onPlayerStateChange} />
             <div>{formatTime(currentTime)} / {formatTime(duration)}</div>
-            <Fluent.IconButton iconProps={{ iconName: 'Reset' }} onClick={reset} />
-            <Fluent.IconButton iconProps={{ iconName: 'Delete' }} onClick={removeAnnotation} disabled={annotations.every(a => !a.isFocused)} />
+            <Fluent.IconButton iconProps={{ iconName: 'Reset' }} onClick={reset} title='reset audio annotator' />
+            <Fluent.IconButton
+              iconProps={{ iconName: 'Delete' }}
+              onClick={removeAnnotation}
+              disabled={annotations.every(a => !a.isFocused)}
+              title='remove audio annotation'
+            />
           </>
         ) : <Fluent.Spinner size={Fluent.SpinnerSize.large} label='Loading audio annotator' />
       }

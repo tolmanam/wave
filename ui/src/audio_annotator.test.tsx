@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { act, fireEvent, render, waitFor } from '@testing-library/react'
+import { act, fireEvent, render } from '@testing-library/react'
 import React from 'react'
 import { AudioAnnotator, XAudioAnnotator } from './audio_annotator'
 import { wave } from './ui'
@@ -20,23 +20,25 @@ import { wave } from './ui'
 const
   name = 'audio_annotator',
   items = [
-    { from: 0, to: 5, tag: 'tag1' },
-    { from: 6, to: 9, tag: 'tag2' },
+    { from: 0, to: 20, tag: 'tag1' },
+    { from: 60, to: 90, tag: 'tag2' },
   ],
   model: AudioAnnotator = {
     name,
     src: '',
-    tags: [],
+    tags: [
+      { name: 'tag1', label: 'Tag 1', color: 'red' },
+      { name: 'tag2', label: 'Tag 2', color: 'blue' },
+    ],
     items
   },
   waitForLoad = async () => act(() => new Promise(res => setTimeout(() => res(), 20)))
-// volumeMock = jest.fn()
 
 class MockAudioContext {
   createGain = () => ({ gain: {} })
   createMediaElementSource = () => this
   connect = () => this
-  decodeAudioData = () => ({ getChannelData: () => [1] })
+  decodeAudioData = () => ({ duration: 1, getChannelData: () => [1] })
 }
 
 describe('AudioAnnotator.tsx', () => {
@@ -47,6 +49,8 @@ describe('AudioAnnotator.tsx', () => {
     window.fetch = () => ({ arrayBuffer: () => '' })
     // @ts-ignore
     window.URL = { createObjectURL: () => '' }
+    // @ts-ignore
+    window.HTMLCanvasElement.prototype.getBoundingClientRect = () => ({ width: 100, left: 0, top: 0 })
   })
 
   it('Renders data-test attr', async () => {
@@ -67,103 +71,133 @@ describe('AudioAnnotator.tsx', () => {
     expect(wave.args[name]).toMatchObject(items)
   })
 
-  it.only('Displays correct cursor when hovering over canvas - no intersection', async () => {
+  it('Displays correct cursor when hovering over canvas - no intersection', async () => {
     const { container } = render(<XAudioAnnotator model={model} />)
     await waitForLoad()
     const canvasEl = container.querySelector('canvas')!
-    fireEvent.mouseMove(canvasEl, { clientX: 250, clientY: 250 })
+    fireEvent.mouseMove(canvasEl, { clientX: 25, clientY: 25 })
     expect(canvasEl.style.cursor).toBe('pointer')
   })
 
-  it.skip('Removes all shapes after clicking reset', () => {
-    const { getByText } = render(<XAudioAnnotator model={model} />)
+  it('Removes all shapes after clicking reset', async () => {
+    const { getByTitle } = render(<XAudioAnnotator model={model} />)
+    await waitForLoad()
     expect(wave.args[name]).toMatchObject(items)
-    fireEvent.click(getByText('Reset'))
+    fireEvent.click(getByTitle('reset audio annotator'))
     expect(wave.args[name]).toMatchObject([])
   })
 
   describe('Annotations', () => {
     it('Draws a new annotation', async () => {
       const { container } = render(<XAudioAnnotator model={model} />)
+      await waitForLoad()
       const canvasEl = container.querySelector('canvas')!
-      fireEvent.mouseDown(canvasEl, { clientX: 110, clientY: 110 })
-      fireEvent.click(canvasEl, { clientX: 150, clientY: 150 })
+      fireEvent.mouseDown(canvasEl, { clientX: 30, clientY: 10, buttons: 1 })
+      fireEvent.mouseMove(canvasEl, { clientX: 40, clientY: 20, buttons: 1 })
+      fireEvent.click(canvasEl, { clientX: 40, clientY: 20, buttons: 1 })
 
-      expect(wave.args[name]).toMatchObject([{ tag: 'person', shape: { annotation: { x1: 110, x2: 150, y1: 110, y2: 150 } } }, ...items])
+      expect(wave.args[name]).toHaveLength(3)
+      expect(wave.args[name]).toMatchObject([items[0], { tag: 'tag1', from: 30, to: 40 }, items[1]])
     })
 
-    it('Draws a new annotation with different tag if selected', () => {
-      const { container, getByText } = render(<XAudioAnnotator model={model} />)
+    it('Does not draw a new annotation if left mouse click not pressed', async () => {
+      const { container } = render(<XAudioAnnotator model={model} />)
+      await waitForLoad()
       const canvasEl = container.querySelector('canvas')!
-      fireEvent.click(getByText('annotationangle'))
-      fireEvent.click(getByText('Object'))
-      fireEvent.mouseDown(canvasEl, { clientX: 110, clientY: 110 })
-      fireEvent.click(canvasEl, { clientX: 150, clientY: 150 })
+      fireEvent.mouseDown(canvasEl, { clientX: 10, clientY: 10 })
+      fireEvent.mouseMove(canvasEl, { clientX: 20, clientY: 20 })
+      fireEvent.click(canvasEl, { clientX: 20, clientY: 20 })
 
-      expect(wave.args[name]).toMatchObject([{ tag: 'object', shape: { annotation: { x1: 110, x2: 150, y1: 110, y2: 150 } } }, ...items])
+      expect(wave.args[name]).toHaveLength(2)
+      expect(wave.args[name]).toMatchObject(items)
     })
 
-    it('Removes annotation after clicking remove btn', () => {
+    it('Draws a new annotation with different tag if selected', async () => {
       const { container, getByText } = render(<XAudioAnnotator model={model} />)
+      await waitForLoad()
+      fireEvent.click(getByText('Tag 2'))
+      const canvasEl = container.querySelector('canvas')!
+      fireEvent.mouseDown(canvasEl, { clientX: 30, clientY: 10, buttons: 1 })
+      fireEvent.mouseMove(canvasEl, { clientX: 40, clientY: 20, buttons: 1 })
+      fireEvent.click(canvasEl, { clientX: 40, clientY: 20, buttons: 1 })
+
+      expect(wave.args[name]).toHaveLength(3)
+      expect(wave.args[name]).toMatchObject([items[0], { tag: 'tag2', from: 30, to: 40 }, items[1]])
+    })
+
+    it('Removes annotation after clicking remove btn', async () => {
+      const { container, getByTitle } = render(<XAudioAnnotator model={model} />)
+      await waitForLoad()
       const canvasEl = container.querySelector('canvas')!
       expect(wave.args[name]).toMatchObject(items)
 
-      const removeBtn = getByText('Remove selection').parentElement?.parentElement?.parentElement
+      const removeBtn = getByTitle('remove audio annotation')!
       expect(removeBtn).toHaveAttribute('aria-disabled', 'true')
-      fireEvent.click(canvasEl, { clientX: 50, clientY: 50 })
+      fireEvent.click(canvasEl, { clientX: 3, clientY: 3 })
       expect(removeBtn).not.toHaveAttribute('aria-disabled')
-      fireEvent.click(removeBtn!)
+      fireEvent.click(removeBtn)
 
-      expect(wave.args[name]).toMatchObject([])
+      expect(wave.args[name]).toHaveLength(1)
+      expect(wave.args[name]).toMatchObject([items[1]])
     })
 
-    it('Changes tag when clicked existing annotation', () => {
+    it('Changes tag when clicked existing annotation', async () => {
       const { container, getByText } = render(<XAudioAnnotator model={model} />)
+      await waitForLoad()
       const canvasEl = container.querySelector('canvas')!
-      fireEvent.click(canvasEl, { clientX: 50, clientY: 50 })
-      fireEvent.click(getByText('Object'))
+      fireEvent.click(canvasEl, { clientX: 3, clientY: 3 })
+      fireEvent.click(getByText('Tag 2'))
 
-      expect(wave.args[name]).toMatchObject([{ ...annotation, tag: 'object' }, polygon])
+      expect(wave.args[name]).toMatchObject([{ ...items[0], tag: 'tag2' }, items[1]])
     })
 
-    it('Displays the annotation cursor when hovering over annotation', () => {
+    it('Displays the annotation cursor when hovering over annotation', async () => {
       const { container } = render(<XAudioAnnotator model={model} />)
+      await waitForLoad()
       const canvasEl = container.querySelector('canvas')!
-      fireEvent.mouseMove(canvasEl, { clientX: 50, clientY: 50 })
+      fireEvent.mouseMove(canvasEl, { clientX: 3, clientY: 3 })
+      expect(canvasEl.style.cursor).toBe('pointer')
+      fireEvent.mouseMove(canvasEl, { clientX: 15, clientY: 3 })
+      expect(canvasEl.style.cursor).toBe('pointer')
+      fireEvent.mouseMove(canvasEl, { clientX: 20, clientY: 3 })
+      fireEvent.click(canvasEl, { clientX: 20, clientY: 3 })
+      fireEvent.mouseMove(canvasEl, { clientX: 12, clientY: 3 })
       expect(canvasEl.style.cursor).toBe('pointer')
     })
 
-    it('Displays the annotation cursor when hovering over focused annotation', () => {
+    it('Displays move cursor when dragging the focused annotation', async () => {
       const { container } = render(<XAudioAnnotator model={model} />)
+      await waitForLoad()
       const canvasEl = container.querySelector('canvas')!
-      fireEvent.click(canvasEl, { clientX: 50, clientY: 50 })
+      fireEvent.mouseMove(canvasEl, { clientX: 3, clientY: 3 })
+      fireEvent.click(canvasEl, { clientX: 3, clientY: 3 })
+      expect(canvasEl.style.cursor).toBe('pointer')
+      fireEvent.mouseDown(canvasEl, { clientX: 3, clientY: 3, buttons: 1 })
+      fireEvent.mouseMove(canvasEl, { clientX: 4, clientY: 4, buttons: 1 })
       expect(canvasEl.style.cursor).toBe('move')
-      fireEvent.mouseMove(canvasEl, { clientX: 100, clientY: 100 })
-      expect(canvasEl.style.cursor).toBe('nwse-resize')
-      fireEvent.mouseMove(canvasEl, { clientX: 250, clientY: 250 })
-      expect(canvasEl.style.cursor).toBe('auto')
+      fireEvent.mouseMove(canvasEl, { clientX: 30, clientY: 5 })
+      fireEvent.click(canvasEl, { clientX: 30, clientY: 5 })
+      expect(canvasEl.style.cursor).toBe('pointer')
     })
 
-    it('Displays the annotation cursor when hovering over focused annotation corners', () => {
+    it.only('Displays resize cursor when dragging the focused annotation', async () => {
       const { container } = render(<XAudioAnnotator model={model} />)
+      await waitForLoad()
       const canvasEl = container.querySelector('canvas')!
-      fireEvent.click(canvasEl, { clientX: 50, clientY: 50 })
-
-      // Top left.
-      fireEvent.mouseMove(canvasEl, { clientX: 10, clientY: 10 })
-      expect(canvasEl.style.cursor).toBe('nwse-resize')
-      // Top right.
-      fireEvent.mouseMove(canvasEl, { clientX: 100, clientY: 10 })
-      expect(canvasEl.style.cursor).toBe('nesw-resize')
-      // Bottom left.
-      fireEvent.mouseMove(canvasEl, { clientX: 10, clientY: 100 })
-      expect(canvasEl.style.cursor).toBe('nesw-resize')
-      // Bottom right.
-      fireEvent.mouseMove(canvasEl, { clientX: 100, clientY: 100 })
-      expect(canvasEl.style.cursor).toBe('nwse-resize')
+      fireEvent.mouseMove(canvasEl, { clientX: 20, clientY: 3 })
+      expect(canvasEl.style.cursor).toBe('pointer')
+      fireEvent.click(canvasEl, { clientX: 20, clientY: 3 })
+      expect(canvasEl.style.cursor).toBe('ew-resize')
+      fireEvent.mouseDown(canvasEl, { clientX: 20, clientY: 3, buttons: 1 })
+      fireEvent.mouseMove(canvasEl, { clientX: 30, clientY: 4, buttons: 1 })
+      expect(canvasEl.style.cursor).toBe('ew-resize')
+      fireEvent.mouseMove(canvasEl, { clientX: 40, clientY: 5 })
+      expect(canvasEl.style.cursor).toBe('pointer')
+      fireEvent.click(canvasEl, { clientX: 40, clientY: 5 })
+      expect(canvasEl.style.cursor).toBe('pointer')
     })
 
-    it('Moves annotation ', () => {
+    it('Moves annotation', () => {
       const { container } = render(<XAudioAnnotator model={model} />)
       const canvasEl = container.querySelector('canvas')!
       fireEvent.click(canvasEl, { clientX: 50, clientY: 50 })

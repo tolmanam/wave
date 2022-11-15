@@ -150,7 +150,7 @@ export const
       y_min = Math.min(y1, y2),
       y_max = Math.max(y1, y2)
 
-    return cursor_x > x_min && cursor_x < x_max && cursor_y > y_min && cursor_y < y_max
+    return cursor_x >= x_min && cursor_x <= x_max && cursor_y >= y_min && cursor_y <= y_max
   },
   getCorner = (x: U, y: U, { x1, y1, x2, y2 }: ImageAnnotatorRect, ignoreMaxMin = false) => {
     const
