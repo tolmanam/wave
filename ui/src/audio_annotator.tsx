@@ -158,7 +158,6 @@ const
       : Math.abs(canvasY - (verticalIntersections[j]?.canvasY || WAVEFORM_HEIGHT))
     return { canvasY, canvasHeight }
   },
-  fromDrawnToAnnotatorItem = ({ from, to, tag }: DrawnAudioAnnotatorItem) => ({ from, to, tag }),
   RangeAnnotator = ({ onAnnotate, activeTag, tags, percentPlayed, skipToTime, annotations, focusAnnotation, duration }: RangeAnnotator) => {
     const
       canvasRef = React.useRef<HTMLCanvasElement>(null),
@@ -418,11 +417,15 @@ export const XAudioAnnotator = ({ model }: { model: AudioAnnotator }) => {
     gainNodeRef = React.useRef<GainNode>(),
     fetchedAudioUrlRef = React.useRef<S>(),
     audioPositionIntervalRef = React.useRef<U>(),
+    setWaveArgs = (annotations: DrawnAudioAnnotatorItem[]) => {
+      wave.args[model.name] = annotations.map(({ from, to, tag }) => ({ from, to, tag })) as unknown as Rec[]
+      if (model.trigger) wave.push()
+    },
     activateTag = (tagName: S) => () => {
       setActiveTag(tagName)
       setAnnotations(prev => {
         const newAnnotations = prev.map(a => { if (a.isFocused) a.tag = tagName; return a })
-        wave.args[model.name] = newAnnotations.map(fromDrawnToAnnotatorItem) as unknown as Rec[]
+        setWaveArgs(newAnnotations)
         return newAnnotations
       })
     },
@@ -500,18 +503,18 @@ export const XAudioAnnotator = ({ model }: { model: AudioAnnotator }) => {
       setAnnotations(prev => {
         const newAnnotations = newAnnotation ? [...prev, newAnnotation] : prev
         newAnnotations.sort((a, b) => a.from - b.from)
-        wave.args[model.name] = newAnnotations.map(fromDrawnToAnnotatorItem) as unknown as Rec[]
+        setWaveArgs(newAnnotations)
         return newAnnotations
       })
     },
     reset = () => {
       setAnnotations([])
-      wave.args[model.name] = []
+      setWaveArgs([])
     },
     removeAnnotation = () => {
       setAnnotations(prev => {
         const newAnnotations = prev.filter(a => !a.isFocused)
-        wave.args[model.name] = newAnnotations.map(fromDrawnToAnnotatorItem) as unknown as Rec[]
+        setWaveArgs(newAnnotations)
         return newAnnotations
       })
     },

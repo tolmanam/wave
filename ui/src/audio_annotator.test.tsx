@@ -376,4 +376,99 @@ describe('AudioAnnotator.tsx', () => {
     })
 
   })
+  describe('Wave trigger', () => {
+    const pushMock = jest.fn()
+
+    beforeAll(() => wave.push = pushMock)
+    beforeEach(() => pushMock.mockReset())
+
+    it('Calls push after drawing the annotation', async () => {
+      const { container } = render(<XAudioAnnotator model={{ ...model, trigger: true }} />)
+      await waitForComponentLoad()
+      const canvasEl = container.querySelector('canvas')!
+      fireEvent.mouseDown(canvasEl, { clientX: 30, clientY: 10, buttons: 1 })
+      fireEvent.mouseMove(canvasEl, { clientX: 40, clientY: 20, buttons: 1 })
+      fireEvent.click(canvasEl, { clientX: 40, clientY: 20, buttons: 1 })
+
+      expect(pushMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('Does not call push after drawing the annottaion', async () => {
+      const { container } = render(<XAudioAnnotator model={model} />)
+      await waitForComponentLoad()
+      const canvasEl = container.querySelector('canvas')!
+      fireEvent.mouseDown(canvasEl, { clientX: 30, clientY: 10, buttons: 1 })
+      fireEvent.mouseMove(canvasEl, { clientX: 40, clientY: 20, buttons: 1 })
+      fireEvent.click(canvasEl, { clientX: 40, clientY: 20, buttons: 1 })
+
+      expect(pushMock).toHaveBeenCalledTimes(0)
+    })
+
+    it('Calls push after moving', async () => {
+      const { container } = render(<XAudioAnnotator model={{ ...model, trigger: true }} />)
+      await waitForComponentLoad()
+      expect(wave.args[name]).toMatchObject(items)
+      const canvasEl = container.querySelector('canvas')!
+      const moveOffset = 5
+      fireEvent.click(canvasEl, { clientX: 10, clientY: 50 })
+      fireEvent.mouseDown(canvasEl, { clientX: 10, clientY: 50, buttons: 1 })
+      fireEvent.mouseMove(canvasEl, { clientX: 10 + moveOffset, clientY: 60, buttons: 1 })
+      fireEvent.click(canvasEl, { clientX: 10 + moveOffset, clientY: 60 })
+
+      expect(pushMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('Calls push after resizing annotation from', async () => {
+      const { container } = render(<XAudioAnnotator model={{ ...model, trigger: true }} />)
+      await waitForComponentLoad()
+      expect(wave.args[name]).toMatchObject(items)
+      const canvasEl = container.querySelector('canvas')!
+      const moveOffset = 5
+      const { from } = items[1]
+      fireEvent.click(canvasEl, { clientX: 70, clientY: 50 })
+      fireEvent.mouseDown(canvasEl, { clientX: from, clientY: 50, buttons: 1 })
+      fireEvent.mouseMove(canvasEl, { clientX: from - moveOffset, clientY: 60, buttons: 1 })
+      fireEvent.click(canvasEl, { clientX: from - moveOffset, clientY: 60 })
+
+      expect(pushMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('Calls push after resizing annotation to', async () => {
+      const { container } = render(<XAudioAnnotator model={{ ...model, trigger: true }} />)
+      await waitForComponentLoad()
+      expect(wave.args[name]).toMatchObject(items)
+      const canvasEl = container.querySelector('canvas')!
+      const moveOffset = 5
+      const { to } = items[0]
+      fireEvent.click(canvasEl, { clientX: 10, clientY: 50 })
+      fireEvent.mouseDown(canvasEl, { clientX: to, clientY: 50, buttons: 1 })
+      fireEvent.mouseMove(canvasEl, { clientX: to + moveOffset, clientY: 60, buttons: 1 })
+      fireEvent.click(canvasEl, { clientX: to + moveOffset, clientY: 60 })
+
+      expect(pushMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('Calls push after removing all annotations', async () => {
+      const { getByTitle } = render(<XAudioAnnotator model={{ ...model, trigger: true }} />)
+      await waitForComponentLoad()
+      expect(wave.args[name]).toMatchObject(items)
+      fireEvent.click(getByTitle('reset audio annotator'))
+      expect(pushMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('Calls push after removing annotation', async () => {
+      const { container, getByTitle } = render(<XAudioAnnotator model={{ ...model, trigger: true }} />)
+      await waitForComponentLoad()
+      const canvasEl = container.querySelector('canvas')!
+      expect(wave.args[name]).toMatchObject(items)
+
+      const removeBtn = getByTitle('remove audio annotation')!
+      expect(removeBtn).toHaveAttribute('aria-disabled', 'true')
+      fireEvent.click(canvasEl, { clientX: 3, clientY: 3 })
+      expect(removeBtn).not.toHaveAttribute('aria-disabled')
+      fireEvent.click(removeBtn)
+
+      expect(pushMock).toHaveBeenCalledTimes(1)
+    })
+  })
 })

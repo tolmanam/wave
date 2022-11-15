@@ -2506,22 +2506,22 @@ def audio_annotator_tag(
 
 
 def audio_annotator_item(
-        range_from: float,
-        range_to: float,
+        from: float,
+        to: float,
         tag: str,
 ) -> AudioAnnotatorItem:
     """Create an annotator item with initial selected tags or no tags.
 
     Args:
-        range_from: The start of the audio annotation in seconds.
-        range_to: The end of the audio annotation in seconds.
+        from: The start of the audio annotation in seconds.
+        to: The end of the audio annotation in seconds.
         tag: The `name` of the audio annotator tag to refer to for the `label` and `color` of this item.
     Returns:
         A `h2o_wave.types.AudioAnnotatorItem` instance.
     """
     return AudioAnnotatorItem(
-        range_from,
-        range_to,
+        from,
+        to,
         tag,
     )
 
