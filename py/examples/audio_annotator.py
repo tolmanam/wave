@@ -3,13 +3,15 @@
 # #form #annotator #audio
 # ---
 from h2o_wave import main, app, Q, ui
+import os
 
 
 @app('/demo')
 async def serve(q: Q):
     # Upload the audio file to Wave server first.
     if not q.app.initialized:
-        q.app.uploaded_mp3, = await q.site.upload(['audio_annotator_sample.mp3'])
+        example_dir = os.path.dirname(os.path.realpath(__file__))
+        q.app.uploaded_mp3, = await q.site.upload([os.path.join(example_dir, 'audio_annotator_sample.mp3')])
         q.app.initialized = True
 
     if q.args.annotator is not None:
