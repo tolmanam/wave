@@ -20,8 +20,8 @@ import { wave } from './ui'
 const
   name = 'audio_annotator',
   items = [
-    { from: 0, to: 20, tag: 'tag1' },
-    { from: 60, to: 90, tag: 'tag2' },
+    { range_from: 0, range_to: 20, tag: 'tag1' },
+    { range_from: 60, range_to: 90, tag: 'tag2' },
   ],
   model: AudioAnnotator = {
     name,
@@ -97,7 +97,7 @@ describe('AudioAnnotator.tsx', () => {
       fireEvent.click(canvasEl, { clientX: 40, clientY: 20, buttons: 1 })
 
       expect(wave.args[name]).toHaveLength(3)
-      expect(wave.args[name]).toMatchObject([items[0], { tag: 'tag1', from: 30, to: 40 }, items[1]])
+      expect(wave.args[name]).toMatchObject([items[0], { tag: 'tag1', range_from: 30, range_to: 40 }, items[1]])
     })
 
     it('Does not draw a new annotation if too small', async () => {
@@ -134,7 +134,7 @@ describe('AudioAnnotator.tsx', () => {
       fireEvent.click(canvasEl, { clientX: 40, clientY: 20, buttons: 1 })
 
       expect(wave.args[name]).toHaveLength(3)
-      expect(wave.args[name]).toMatchObject([items[0], { tag: 'tag2', from: 30, to: 40 }, items[1]])
+      expect(wave.args[name]).toMatchObject([items[0], { tag: 'tag2', range_from: 30, range_to: 40 }, items[1]])
     })
 
     it('Removes annotation after clicking remove btn', async () => {
@@ -236,7 +236,7 @@ describe('AudioAnnotator.tsx', () => {
       fireEvent.click(canvasEl, { clientX: 10 + moveOffset, clientY: 60 })
 
       const { from, to } = items[0]
-      expect(wave.args[name]).toMatchObject([{ ...items[0], from: from + moveOffset, to: to + moveOffset }, items[1]])
+      expect(wave.args[name]).toMatchObject([{ ...items[0], range_from: from + moveOffset, range_to: to + moveOffset }, items[1]])
     })
 
     it('Does not move annotation if left mouse btn not pressed (dragging)', async () => {
@@ -264,7 +264,7 @@ describe('AudioAnnotator.tsx', () => {
       fireEvent.mouseMove(canvasEl, { clientX: from - moveOffset, clientY: 60, buttons: 1 })
       fireEvent.click(canvasEl, { clientX: from - moveOffset, clientY: 60 })
 
-      expect(wave.args[name]).toMatchObject([items[0], { ...items[1], from: from - moveOffset }])
+      expect(wave.args[name]).toMatchObject([items[0], { ...items[1], range_from: from - moveOffset }])
     })
 
     it('Resizes annotation from and exceeds the "to"', async () => {
@@ -279,7 +279,7 @@ describe('AudioAnnotator.tsx', () => {
       fireEvent.mouseMove(canvasEl, { clientX: from + moveOffset, clientY: 60, buttons: 1 })
       fireEvent.click(canvasEl, { clientX: from + moveOffset, clientY: 60 })
 
-      expect(wave.args[name]).toMatchObject([items[0], { ...items[1], from: to, to: to + 5 }])
+      expect(wave.args[name]).toMatchObject([items[0], { ...items[1], range_from: to, range_to: to + 5 }])
     })
 
     it('Resizes annotation to', async () => {
@@ -294,7 +294,7 @@ describe('AudioAnnotator.tsx', () => {
       fireEvent.mouseMove(canvasEl, { clientX: to + moveOffset, clientY: 60, buttons: 1 })
       fireEvent.click(canvasEl, { clientX: to + moveOffset, clientY: 60 })
 
-      expect(wave.args[name]).toMatchObject([{ ...items[0], to: to + moveOffset }, items[1]])
+      expect(wave.args[name]).toMatchObject([{ ...items[0], range_to: to + moveOffset }, items[1]])
     })
 
     it('Resizes annotation to and exceeds the "from"', async () => {
@@ -309,7 +309,7 @@ describe('AudioAnnotator.tsx', () => {
       fireEvent.mouseMove(canvasEl, { clientX: to - moveOffset, clientY: 60, buttons: 1 })
       fireEvent.click(canvasEl, { clientX: to - moveOffset, clientY: 60 })
 
-      expect(wave.args[name]).toMatchObject([items[0], { ...items[1], from: to - moveOffset, to: from }])
+      expect(wave.args[name]).toMatchObject([items[0], { ...items[1], range_from: to - moveOffset, range_to: from }])
     })
 
   })

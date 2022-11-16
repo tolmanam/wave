@@ -22,9 +22,9 @@ interface AudioAnnotatorTag {
 /** Create an annotator item with initial selected tags or no tags. */
 interface AudioAnnotatorItem {
   /** The start of the audio annotation in seconds. */
-  from: F
+  range_from: F
   /** The end of the audio annotation in seconds. */
-  to: F
+  range_to: F
   /** The `name` of the audio annotator tag to refer to for the `label` and `color` of this item. */
   tag: S
 }
@@ -126,12 +126,12 @@ const
       .filter((v, i) => v !== "00" || i > 0)
       .join(":")
   },
-  getIntersectingEdge = (x: U, { from, to }: DrawnAudioAnnotatorItem) => {
+  getIntersectingEdge = (x: U, { range_from: from, range_to: to }: DrawnAudioAnnotatorItem) => {
     if (Math.abs(from - x) <= ANNOTATION_HANDLE_OFFSET) return 'resize-from'
     if (Math.abs(to - x) <= ANNOTATION_HANDLE_OFFSET) return 'resize-to'
   },
   isAnnotationIntersecting = (a1: DrawnAudioAnnotatorItem, a2: DrawnAudioAnnotatorItem) => {
-    return (a2.from >= a1.from && a2.from <= a1.to) || (a1.from >= a2.from && a1.from <= a2.to)
+    return (a2.range_from >= a1.range_from && a2.range_from <= a1.range_to) || (a1.range_from >= a2.range_from && a1.range_from <= a2.range_to)
   },
   createAnnotation = (start: U, end: U, tag: S) => ({
     from: Math.min(start, end),
@@ -141,11 +141,11 @@ const
     canvasY: 0
   }),
   getIntersectedAnnotation = (annotations: DrawnAudioAnnotatorItem[], x: U, y: U) => {
-    return annotations.find(a => isIntersectingRect(x, y, { x1: a.from, x2: a.to, y1: a.canvasY, y2: a.canvasHeight + a.canvasY }))
+    return annotations.find(a => isIntersectingRect(x, y, { x1: a.range_from, x2: a.range_to, y1: a.canvasY, y2: a.canvasHeight + a.canvasY }))
   },
   getCanvasDimensions = (intersections: DrawnAudioAnnotatorItem[], annotation: DrawnAudioAnnotatorItem, maxDepth?: U) => {
     const verticalIntersections = intersections
-      .filter(a => a !== annotation && annotation.from >= a.from && annotation.from <= a.to)
+      .filter(a => a !== annotation && annotation.range_from >= a.range_from && annotation.range_from <= a.range_to)
       .sort((a, b) => a.canvasY - b.canvasY)
     let canvasY = 0
     let j = 0
@@ -176,8 +176,8 @@ const
       })), [tags, theme]),
       getMaxDepth = (idx: U, annotation: DrawnAudioAnnotatorItem, currMax: U) => {
         // TODO: Super ugly perf-wise.
-        let currmax = annotations.filter(a => annotation.from >= a.from && annotation.from <= a.to).length
-        for (let j = idx + 1; annotations[j]?.from >= annotation?.from && annotations[j]?.from <= annotation?.to; j++) {
+        let currmax = annotations.filter(a => annotation.range_from >= a.range_from && annotation.range_from <= a.range_to).length
+        for (let j = idx + 1; annotations[j]?.range_from >= annotation?.range_from && annotations[j]?.range_from <= annotation?.range_to; j++) {
           currmax = Math.max(currmax, getMaxDepth(j, annotations[j], currMax + 1))
         }
         return currmax
@@ -189,7 +189,7 @@ const
           const annotation = annotations[i]
           // TODO: Super ugly perf-wise.
           const intersections = annotations.filter(a => a !== annotation && isAnnotationIntersecting(a, annotation))
-          const bottomIntersections = intersections.filter(a => a !== annotation && a.from >= annotation.from && a.from <= annotation.to).length
+          const bottomIntersections = intersections.filter(a => a !== annotation && a.range_from >= annotation.range_from && a.range_from <= annotation.range_to).length
           // TODO: Add memoization.
           const maxDepth = getMaxDepth(i, annotation, 1)
           const shouldFillRemainingSpace = !bottomIntersections || maxDepth < currMaxDepth
@@ -205,7 +205,7 @@ const
         const ctx = ctxRef.current
         if (!ctx || !canvas) return
         ctx.clearRect(0, 0, canvas.width, canvas.height)
-        annotations.forEach(({ from, to, tag, canvasHeight, canvasY, isFocused }) => {
+        annotations.forEach(({ range_from: from, range_to: to, tag, canvasHeight, canvasY, isFocused }) => {
           ctx.fillStyle = colorsMap.get(tag)?.transparent || 'red'
           ctx.fillRect(from, canvasY, to - from, canvasHeight)
           if (isFocused) {
@@ -245,7 +245,7 @@ const
         const intersected = getIntersectedAnnotation(annotations, cursor_x, cursor_y)
         setTooltipProps(!intersected ? null : {
           title: colorsMap.get(intersected.tag)?.label || '',
-          range: `${formatTime(intersected.from / canvas.width * duration)} - ${formatTime(intersected.to / canvas.width * duration)}`,
+          range: `${formatTime(intersected.range_from / canvas.width * duration)} - ${formatTime(intersected.range_to / canvas.width * duration)}`,
           top: cursor_y + TOP_TOOLTIP_OFFSET,
           left: cursor_x + LEFT_TOOLTIP_OFFSET
         })
@@ -270,22 +270,22 @@ const
         }
         else if (action === 'move' && currIntersected) {
           const movedOffset = cursor_x - currDrawnAnnotation.current.from
-          currIntersected.from += movedOffset
-          currIntersected.to += movedOffset
-          tooltipFrom = currIntersected.from
-          tooltipTo = currIntersected.to
+          currIntersected.range_from += movedOffset
+          currIntersected.range_to += movedOffset
+          tooltipFrom = currIntersected.range_from
+          tooltipTo = currIntersected.range_to
           currDrawnAnnotation.current.from += movedOffset
         }
         else if (action === 'resize-from' && currIntersected) {
-          currIntersected.from = cursor_x
-          tooltipFrom = currIntersected.from
-          tooltipTo = currIntersected.to
+          currIntersected.range_from = cursor_x
+          tooltipFrom = currIntersected.range_from
+          tooltipTo = currIntersected.range_to
           canvas.style.cursor = 'ew-resize'
         }
         else if (action === 'resize-to' && currIntersected) {
-          currIntersected.to = cursor_x
-          tooltipFrom = currIntersected.from
-          tooltipTo = currIntersected.to
+          currIntersected.range_to = cursor_x
+          tooltipFrom = currIntersected.range_from
+          tooltipTo = currIntersected.range_to
           canvas.style.cursor = 'ew-resize'
         }
 
@@ -333,9 +333,9 @@ const
         else if (action === 'resize-from' || action === 'resize-to') {
           const resized = currDrawnAnnotation.current.intersected
           if (resized) {
-            const { from, to } = resized
-            resized.from = Math.min(from, to)
-            resized.to = Math.max(from, to)
+            const { range_from: from, range_to: to } = resized
+            resized.range_from = Math.min(from, to)
+            resized.range_to = Math.max(from, to)
           }
         }
         onAnnotate(newAnnotation)
@@ -418,7 +418,7 @@ export const XAudioAnnotator = ({ model }: { model: AudioAnnotator }) => {
     fetchedAudioUrlRef = React.useRef<S>(),
     audioPositionIntervalRef = React.useRef<U>(),
     setWaveArgs = (annotations: DrawnAudioAnnotatorItem[]) => {
-      wave.args[model.name] = annotations.map(({ from, to, tag }) => ({ from, to, tag })) as unknown as Rec[]
+      wave.args[model.name] = annotations.map(({ range_from: from, range_to: to, tag }) => ({ from, to, tag })) as unknown as Rec[]
       if (model.trigger) wave.push()
     },
     activateTag = (tagName: S) => () => {
@@ -502,7 +502,7 @@ export const XAudioAnnotator = ({ model }: { model: AudioAnnotator }) => {
     onAnnotate = (newAnnotation?: DrawnAudioAnnotatorItem) => {
       setAnnotations(prev => {
         const newAnnotations = newAnnotation ? [...prev, newAnnotation] : prev
-        newAnnotations.sort((a, b) => a.from - b.from)
+        newAnnotations.sort((a, b) => a.range_from - b.range_from)
         setWaveArgs(newAnnotations)
         return newAnnotations
       })

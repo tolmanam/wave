@@ -14,9 +14,9 @@
       <option name="Python" value="true"/>
     </context>
   </template>
-  <template name="w_audio_annotator_item" value="ui.audio_annotator_item(from=$from$,to=$to$,tag='$tag$'),$END$" description="Create a minimal Wave AudioAnnotatorItem." toReformat="true" toShortenFQNames="true">
-    <variable name="from" expression="" defaultValue="" alwaysStopAt="true"/>
-    <variable name="to" expression="" defaultValue="" alwaysStopAt="true"/>
+  <template name="w_audio_annotator_item" value="ui.audio_annotator_item(range_from=$range_from$,range_to=$range_to$,tag='$tag$'),$END$" description="Create a minimal Wave AudioAnnotatorItem." toReformat="true" toShortenFQNames="true">
+    <variable name="range_from" expression="" defaultValue="" alwaysStopAt="true"/>
+    <variable name="range_to" expression="" defaultValue="" alwaysStopAt="true"/>
     <variable name="tag" expression="" defaultValue="" alwaysStopAt="true"/>
     <context>
       <option name="Python" value="true"/>
@@ -994,9 +994,9 @@
       <option name="Python" value="true"/>
     </context>
   </template>
-  <template name="w_full_audio_annotator_item" value="ui.audio_annotator_item(from=$from$,to=$to$,tag='$tag$'),$END$" description="Create Wave AudioAnnotatorItem with full attributes." toReformat="true" toShortenFQNames="true">
-    <variable name="from" expression="" defaultValue="" alwaysStopAt="true"/>
-    <variable name="to" expression="" defaultValue="" alwaysStopAt="true"/>
+  <template name="w_full_audio_annotator_item" value="ui.audio_annotator_item(range_from=$range_from$,range_to=$range_to$,tag='$tag$'),$END$" description="Create Wave AudioAnnotatorItem with full attributes." toReformat="true" toShortenFQNames="true">
+    <variable name="range_from" expression="" defaultValue="" alwaysStopAt="true"/>
+    <variable name="range_to" expression="" defaultValue="" alwaysStopAt="true"/>
     <variable name="tag" expression="" defaultValue="" alwaysStopAt="true"/>
     <context>
       <option name="Python" value="true"/>

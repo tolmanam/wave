@@ -2911,21 +2911,21 @@ ui_audio_annotator_tag <- function(
 
 #' Create an annotator item with initial selected tags or no tags.
 #'
-#' @param from The start of the audio annotation in seconds.
-#' @param to The end of the audio annotation in seconds.
+#' @param range_from The start of the audio annotation in seconds.
+#' @param range_to The end of the audio annotation in seconds.
 #' @param tag The `name` of the audio annotator tag to refer to for the `label` and `color` of this item.
 #' @return A AudioAnnotatorItem instance.
 #' @export
 ui_audio_annotator_item <- function(
-  from,
-  to,
+  range_from,
+  range_to,
   tag) {
-  .guard_scalar("from", "numeric", from)
-  .guard_scalar("to", "numeric", to)
+  .guard_scalar("range_from", "numeric", range_from)
+  .guard_scalar("range_to", "numeric", range_to)
   .guard_scalar("tag", "character", tag)
   .o <- list(
-    from=from,
-    to=to,
+    range_from=range_from,
+    range_to=range_to,
     tag=tag)
   class(.o) <- append(class(.o), c(.wave_obj, "WaveAudioAnnotatorItem"))
   return(.o)

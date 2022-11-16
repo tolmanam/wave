@@ -6732,46 +6732,46 @@ class AudioAnnotatorItem:
     """
     def __init__(
             self,
-            from: float,
-            to: float,
+            range_from: float,
+            range_to: float,
             tag: str,
     ):
-        _guard_scalar('AudioAnnotatorItem.from', from, (float, int,), False, False, False)
-        _guard_scalar('AudioAnnotatorItem.to', to, (float, int,), False, False, False)
+        _guard_scalar('AudioAnnotatorItem.range_from', range_from, (float, int,), False, False, False)
+        _guard_scalar('AudioAnnotatorItem.range_to', range_to, (float, int,), False, False, False)
         _guard_scalar('AudioAnnotatorItem.tag', tag, (str,), False, False, False)
-        self.from = from
+        self.range_from = range_from
         """The start of the audio annotation in seconds."""
-        self.to = to
+        self.range_to = range_to
         """The end of the audio annotation in seconds."""
         self.tag = tag
         """The `name` of the audio annotator tag to refer to for the `label` and `color` of this item."""
 
     def dump(self) -> Dict:
         """Returns the contents of this object as a dict."""
-        _guard_scalar('AudioAnnotatorItem.from', self.from, (float, int,), False, False, False)
-        _guard_scalar('AudioAnnotatorItem.to', self.to, (float, int,), False, False, False)
+        _guard_scalar('AudioAnnotatorItem.range_from', self.range_from, (float, int,), False, False, False)
+        _guard_scalar('AudioAnnotatorItem.range_to', self.range_to, (float, int,), False, False, False)
         _guard_scalar('AudioAnnotatorItem.tag', self.tag, (str,), False, False, False)
         return _dump(
-            from=self.from,
-            to=self.to,
+            range_from=self.range_from,
+            range_to=self.range_to,
             tag=self.tag,
         )
 
     @staticmethod
     def load(__d: Dict) -> 'AudioAnnotatorItem':
         """Creates an instance of this class using the contents of a dict."""
-        __d_from: Any = __d.get('from')
-        _guard_scalar('AudioAnnotatorItem.from', __d_from, (float, int,), False, False, False)
-        __d_to: Any = __d.get('to')
-        _guard_scalar('AudioAnnotatorItem.to', __d_to, (float, int,), False, False, False)
+        __d_range_from: Any = __d.get('range_from')
+        _guard_scalar('AudioAnnotatorItem.range_from', __d_range_from, (float, int,), False, False, False)
+        __d_range_to: Any = __d.get('range_to')
+        _guard_scalar('AudioAnnotatorItem.range_to', __d_range_to, (float, int,), False, False, False)
         __d_tag: Any = __d.get('tag')
         _guard_scalar('AudioAnnotatorItem.tag', __d_tag, (str,), False, False, False)
-        from: float = __d_from
-        to: float = __d_to
+        range_from: float = __d_range_from
+        range_to: float = __d_range_to
         tag: str = __d_tag
         return AudioAnnotatorItem(
-            from,
-            to,
+            range_from,
+            range_to,
             tag,
         )
 
