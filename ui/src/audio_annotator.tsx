@@ -1,4 +1,5 @@
 import * as Fluent from '@fluentui/react'
+import { IDropdownOption } from '@fluentui/react'
 import { B, F, Id, Rec, S, U } from 'h2o-wave'
 import React from 'react'
 import { stylesheet } from 'typestyle'
@@ -115,7 +116,20 @@ const
       userSelect: 'none',
       boxShadow: `${cssVar('$text1')} 0px 6.4px 14.4px 0px, ${cssVar('$text2')} 0px 1.2px 3.6px 0px`
     },
+    controlBarItem: {
+      flex: 1,
+      display: 'flex'
+    }
   }),
+  speedAdjustmentOptions = [
+    { key: 0.25, text: '0.25x' },
+    { key: 0.5, text: '0.5x' },
+    { key: 0.75, text: '0.75x' },
+    { key: 1, text: 'Normal' },
+    { key: 1.25, text: '1.25x' },
+    { key: 1.5, text: '1.5x' },
+    { key: 2, text: '2x' },
+  ],
   formatTime = (secs: F) => {
     const hours = Math.floor(secs / 3600)
     const minutes = Math.floor(secs / 60) % 60
@@ -224,7 +238,7 @@ const
         // Draw track.
         const trackPosition = canvas.width * percentPlayed
         // TODO: Change to normal color.
-        ctx.fillStyle = cssVarValue('$red')
+        ctx.fillStyle = cssVarValue('$themeDark')
         ctx.fillRect(trackPosition, 0, TRACK_WIDTH, WAVEFORM_HEIGHT)
       },
       onMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -412,6 +426,7 @@ export const XAudioAnnotator = ({ model }: { model: AudioAnnotator }) => {
     [duration, setDuration] = React.useState(0),
     [currentTime, setCurrentTime] = React.useState(0),
     [annotations, setAnnotations] = React.useState<DrawnAudioAnnotatorItem[]>(model.items?.map(i => ({ ...i, canvasHeight: 0, canvasY: 0 })) || []),
+    [volumeIcon, setVolumeIcon] = React.useState('Volume3'),
     audioRef = React.useRef<HTMLAudioElement>(null),
     audioContextRef = React.useRef<AudioContext>(),
     gainNodeRef = React.useRef<GainNode>(),
@@ -490,7 +505,15 @@ export const XAudioAnnotator = ({ model }: { model: AudioAnnotator }) => {
       setIsPlaying(false)
       if (audioPositionIntervalRef.current) window.clearInterval(audioPositionIntervalRef.current)
     },
-    onVolumeChange = (v: U) => { if (gainNodeRef.current) gainNodeRef.current.gain.value = v },
+    onPlaybackResume = () => {
+      if (isPlaying) onPlayerStateChange()
+      setCurrentTime(0)
+      if (audioRef.current) audioRef.current.currentTime = 0
+    },
+    onVolumeChange = (v: U) => {
+      if (gainNodeRef.current) gainNodeRef.current.gain.value = v
+      setVolumeIcon(v === 0 ? 'VolumeDisabled' : (v < 0.3 ? 'Volume1' : (v < 0.75 ? 'Volume2' : 'Volume3')))
+    },
     onSpeedChange = (v: U) => { if (audioRef.current) audioRef.current.playbackRate = v },
     skipToTime = (e: React.MouseEvent<HTMLCanvasElement>) => {
       if (!audioRef.current) return
@@ -540,6 +563,23 @@ export const XAudioAnnotator = ({ model }: { model: AudioAnnotator }) => {
         waveFormData ? (
           <>
             <AnnotatorTags tags={model.tags} activateTag={activateTag} activeTag={activeTag} />
+            <Fluent.CommandBar styles={{ root: { padding: 0 } }} items={[
+              {
+                key: 'remove-all',
+                text: 'Remove all',
+                onClick: reset,
+                disabled: annotations.length === 0,
+                iconProps: { iconName: 'DependencyRemove', styles: { root: { fontSize: 20 } } },
+              },
+              {
+                key: 'remove-all',
+                text: 'Remove selected',
+                onClick: removeAnnotation,
+                disabled: annotations.every(a => !a.isFocused),
+                iconProps: { iconName: 'Delete', styles: { root: { fontSize: 20 } } },
+              },
+            ]}
+            />
             <div className={css.annotatorContainer}>
               <MicroBars data={waveFormData} value='val' category='cat' color='$themePrimary' zeroValue={0} />
               <RangeAnnotator
@@ -553,17 +593,36 @@ export const XAudioAnnotator = ({ model }: { model: AudioAnnotator }) => {
                 focusAnnotation={focusAnnotation}
               />
             </div>
-            <Fluent.Slider label='Speed' min={0} defaultValue={1} max={2} step={0.01} onChange={onSpeedChange} />
-            <Fluent.Slider label='Volume' min={0} defaultValue={1} max={2} step={0.01} onChange={onVolumeChange} />
-            <Fluent.IconButton iconProps={{ iconName: isPlaying ? 'Pause' : 'Play' }} onClick={onPlayerStateChange} />
-            <div>{formatTime(currentTime)} / {formatTime(duration)}</div>
-            <Fluent.IconButton iconProps={{ iconName: 'Reset' }} onClick={reset} title='reset audio annotator' />
-            <Fluent.IconButton
-              iconProps={{ iconName: 'Delete' }}
-              onClick={removeAnnotation}
-              disabled={annotations.every(a => !a.isFocused)}
-              title='remove audio annotation'
-            />
+            <div style={{ display: 'flex' }}>
+              <div className={css.controlBarItem} style={{ justifyContent: 'flex-start' }}>
+                <Fluent.Icon iconName={volumeIcon} styles={{ root: { fontSize: 18 } }} />
+                <Fluent.Slider styles={{ root: { minWidth: 180 } }} min={0} defaultValue={1} max={2} step={0.01} onChange={onVolumeChange} valueFormat={v => `${Math.round(v * 100)}%`} />
+                <Fluent.Icon iconName={'PlaybackRate1x'} styles={{ root: { marginTop: 3, marginLeft: 6, fontSize: 18 } }} />
+                <Fluent.Dropdown
+                  title='Playback speed'
+                  styles={{ title: { border: 'none', }, dropdown: { selectors: { ':focus::after': { border: 'none' } }, minWidth: 70 } }}
+                  defaultSelectedKey={audioRef?.current?.playbackRate || 1}
+                  options={speedAdjustmentOptions}
+                  onChange={(_ev, option: IDropdownOption | undefined) => onSpeedChange(option!.key as number)}
+                />
+              </div>
+              <div className={css.controlBarItem} style={{ justifyContent: 'center', marginTop: 12 }}>
+                <Fluent.IconButton iconProps={{ iconName: 'PlayReverseResume' }} styles={{ icon: { fontSize: 18 } }} onClick={onPlaybackResume} />
+                <Fluent.IconButton
+                  iconProps={{ iconName: isPlaying ? 'Pause' : 'PlaySolid' }}
+                  onClick={onPlayerStateChange}
+                  styles={{
+                    // marginRight 24 centers the play button - it is the width of the PlayReverseResume button.
+                    root: { backgroundColor: cssVar('$themePrimary'), borderRadius: 50, marginRight: 24 },
+                    rootHovered: { backgroundColor: cssVar('$themeSecondary') },
+                    icon: { marginBottom: 2, color: cssVar('$white'), fontSize: 18 }
+                  }}
+                />
+              </div>
+              <div className={css.controlBarItem} style={{ justifyContent: 'flex-end', marginTop: 4 }}>
+                <div >{formatTime(currentTime)} / {formatTime(duration)}</div>
+              </div>
+            </div>
           </>
         ) : <Fluent.Spinner size={Fluent.SpinnerSize.large} label='Loading audio annotator' />
       }
