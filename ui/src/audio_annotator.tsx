@@ -134,8 +134,8 @@ const
     return (a2.range_from >= a1.range_from && a2.range_from <= a1.range_to) || (a1.range_from >= a2.range_from && a1.range_from <= a2.range_to)
   },
   createAnnotation = (start: U, end: U, tag: S) => ({
-    from: Math.min(start, end),
-    to: Math.max(start, end),
+    range_from: Math.min(start, end),
+    range_to: Math.max(start, end),
     tag,
     canvasHeight: WAVEFORM_HEIGHT,
     canvasY: 0
@@ -263,7 +263,7 @@ const
         let tooltipTo = 0
         const { action, intersected: currIntersected } = currDrawnAnnotation.current
         if (action === 'new') {
-          const { from, to } = createAnnotation(currDrawnAnnotation.current.from, cursor_x, activeTag)
+          const { range_from: from, range_to: to } = createAnnotation(currDrawnAnnotation.current.from, cursor_x, activeTag)
           tooltipFrom = from
           tooltipTo = to
           currDrawnAnnotation.current = { from, to, action: 'new' }
@@ -418,7 +418,7 @@ export const XAudioAnnotator = ({ model }: { model: AudioAnnotator }) => {
     fetchedAudioUrlRef = React.useRef<S>(),
     audioPositionIntervalRef = React.useRef<U>(),
     setWaveArgs = (annotations: DrawnAudioAnnotatorItem[]) => {
-      wave.args[model.name] = annotations.map(({ range_from: from, range_to: to, tag }) => ({ from, to, tag })) as unknown as Rec[]
+      wave.args[model.name] = annotations.map(({ range_from, range_to, tag }) => ({ range_from, range_to, tag })) as unknown as Rec[]
       if (model.trigger) wave.push()
     },
     activateTag = (tagName: S) => () => {

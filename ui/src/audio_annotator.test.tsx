@@ -235,8 +235,8 @@ describe('AudioAnnotator.tsx', () => {
       fireEvent.mouseMove(canvasEl, { clientX: 10 + moveOffset, clientY: 60, buttons: 1 })
       fireEvent.click(canvasEl, { clientX: 10 + moveOffset, clientY: 60 })
 
-      const { from, to } = items[0]
-      expect(wave.args[name]).toMatchObject([{ ...items[0], range_from: from + moveOffset, range_to: to + moveOffset }, items[1]])
+      const { range_from, range_to } = items[0]
+      expect(wave.args[name]).toMatchObject([{ ...items[0], range_from: range_from + moveOffset, range_to: range_to + moveOffset }, items[1]])
     })
 
     it('Does not move annotation if left mouse btn not pressed (dragging)', async () => {
@@ -258,13 +258,13 @@ describe('AudioAnnotator.tsx', () => {
       expect(wave.args[name]).toMatchObject(items)
       const canvasEl = container.querySelector('canvas')!
       const moveOffset = 5
-      const { from } = items[1]
+      const { range_from } = items[1]
       fireEvent.click(canvasEl, { clientX: 70, clientY: 50 })
-      fireEvent.mouseDown(canvasEl, { clientX: from, clientY: 50, buttons: 1 })
-      fireEvent.mouseMove(canvasEl, { clientX: from - moveOffset, clientY: 60, buttons: 1 })
-      fireEvent.click(canvasEl, { clientX: from - moveOffset, clientY: 60 })
+      fireEvent.mouseDown(canvasEl, { clientX: range_from, clientY: 50, buttons: 1 })
+      fireEvent.mouseMove(canvasEl, { clientX: range_from - moveOffset, clientY: 60, buttons: 1 })
+      fireEvent.click(canvasEl, { clientX: range_from - moveOffset, clientY: 60 })
 
-      expect(wave.args[name]).toMatchObject([items[0], { ...items[1], range_from: from - moveOffset }])
+      expect(wave.args[name]).toMatchObject([items[0], { ...items[1], range_from: range_from - moveOffset }])
     })
 
     it('Resizes annotation from and exceeds the "to"', async () => {
@@ -272,14 +272,14 @@ describe('AudioAnnotator.tsx', () => {
       await waitForComponentLoad()
       expect(wave.args[name]).toMatchObject(items)
       const canvasEl = container.querySelector('canvas')!
-      const { from, to } = items[1]
-      const moveOffset = to - from + 5
+      const { range_from, range_to } = items[1]
+      const moveOffset = range_to - range_from + 5
       fireEvent.click(canvasEl, { clientX: 70, clientY: 50 })
-      fireEvent.mouseDown(canvasEl, { clientX: from, clientY: 50, buttons: 1 })
-      fireEvent.mouseMove(canvasEl, { clientX: from + moveOffset, clientY: 60, buttons: 1 })
-      fireEvent.click(canvasEl, { clientX: from + moveOffset, clientY: 60 })
+      fireEvent.mouseDown(canvasEl, { clientX: range_from, clientY: 50, buttons: 1 })
+      fireEvent.mouseMove(canvasEl, { clientX: range_from + moveOffset, clientY: 60, buttons: 1 })
+      fireEvent.click(canvasEl, { clientX: range_from + moveOffset, clientY: 60 })
 
-      expect(wave.args[name]).toMatchObject([items[0], { ...items[1], range_from: to, range_to: to + 5 }])
+      expect(wave.args[name]).toMatchObject([items[0], { ...items[1], range_from: range_to, range_to: range_to + 5 }])
     })
 
     it('Resizes annotation to', async () => {
@@ -288,13 +288,13 @@ describe('AudioAnnotator.tsx', () => {
       expect(wave.args[name]).toMatchObject(items)
       const canvasEl = container.querySelector('canvas')!
       const moveOffset = 5
-      const { to } = items[0]
+      const { range_to } = items[0]
       fireEvent.click(canvasEl, { clientX: 10, clientY: 50 })
-      fireEvent.mouseDown(canvasEl, { clientX: to, clientY: 50, buttons: 1 })
-      fireEvent.mouseMove(canvasEl, { clientX: to + moveOffset, clientY: 60, buttons: 1 })
-      fireEvent.click(canvasEl, { clientX: to + moveOffset, clientY: 60 })
+      fireEvent.mouseDown(canvasEl, { clientX: range_to, clientY: 50, buttons: 1 })
+      fireEvent.mouseMove(canvasEl, { clientX: range_to + moveOffset, clientY: 60, buttons: 1 })
+      fireEvent.click(canvasEl, { clientX: range_to + moveOffset, clientY: 60 })
 
-      expect(wave.args[name]).toMatchObject([{ ...items[0], range_to: to + moveOffset }, items[1]])
+      expect(wave.args[name]).toMatchObject([{ ...items[0], range_to: range_to + moveOffset }, items[1]])
     })
 
     it('Resizes annotation to and exceeds the "from"', async () => {
@@ -302,14 +302,14 @@ describe('AudioAnnotator.tsx', () => {
       await waitForComponentLoad()
       expect(wave.args[name]).toMatchObject(items)
       const canvasEl = container.querySelector('canvas')!
-      const { from, to } = items[1]
-      const moveOffset = to - from + 5
+      const { range_from, range_to } = items[1]
+      const moveOffset = range_to - range_from + 5
       fireEvent.click(canvasEl, { clientX: 70, clientY: 50 })
-      fireEvent.mouseDown(canvasEl, { clientX: to, clientY: 50, buttons: 1 })
-      fireEvent.mouseMove(canvasEl, { clientX: to - moveOffset, clientY: 60, buttons: 1 })
-      fireEvent.click(canvasEl, { clientX: to - moveOffset, clientY: 60 })
+      fireEvent.mouseDown(canvasEl, { clientX: range_to, clientY: 50, buttons: 1 })
+      fireEvent.mouseMove(canvasEl, { clientX: range_to - moveOffset, clientY: 60, buttons: 1 })
+      fireEvent.click(canvasEl, { clientX: range_to - moveOffset, clientY: 60 })
 
-      expect(wave.args[name]).toMatchObject([items[0], { ...items[1], range_from: to - moveOffset, range_to: from }])
+      expect(wave.args[name]).toMatchObject([items[0], { ...items[1], range_from: range_to - moveOffset, range_to: range_from }])
     })
 
   })
@@ -356,10 +356,10 @@ describe('AudioAnnotator.tsx', () => {
       await waitForComponentLoad()
       const canvasEl = container.querySelector('canvas')!
       const moveOffset = 5
-      const { from } = items[1]
+      const { range_from } = items[1]
       fireEvent.click(canvasEl, { clientX: 70, clientY: 50 })
-      fireEvent.mouseDown(canvasEl, { clientX: from, clientY: 50, buttons: 1 })
-      fireEvent.mouseMove(canvasEl, { clientX: from - moveOffset, clientY: 60, buttons: 1 })
+      fireEvent.mouseDown(canvasEl, { clientX: range_from, clientY: 50, buttons: 1 })
+      fireEvent.mouseMove(canvasEl, { clientX: range_from - moveOffset, clientY: 60, buttons: 1 })
       expect(getByTestId('audio-annotator-tooltip')).toBeVisible()
     })
 
@@ -368,10 +368,10 @@ describe('AudioAnnotator.tsx', () => {
       await waitForComponentLoad()
       const canvasEl = container.querySelector('canvas')!
       const moveOffset = 5
-      const { to } = items[0]
+      const { range_to } = items[0]
       fireEvent.click(canvasEl, { clientX: 10, clientY: 50 })
-      fireEvent.mouseDown(canvasEl, { clientX: to, clientY: 50, buttons: 1 })
-      fireEvent.mouseMove(canvasEl, { clientX: to + moveOffset, clientY: 60, buttons: 1 })
+      fireEvent.mouseDown(canvasEl, { clientX: range_to, clientY: 50, buttons: 1 })
+      fireEvent.mouseMove(canvasEl, { clientX: range_to + moveOffset, clientY: 60, buttons: 1 })
       expect(getByTestId('audio-annotator-tooltip')).toBeVisible()
     })
 
@@ -424,11 +424,11 @@ describe('AudioAnnotator.tsx', () => {
       expect(wave.args[name]).toMatchObject(items)
       const canvasEl = container.querySelector('canvas')!
       const moveOffset = 5
-      const { from } = items[1]
+      const { range_from } = items[1]
       fireEvent.click(canvasEl, { clientX: 70, clientY: 50 })
-      fireEvent.mouseDown(canvasEl, { clientX: from, clientY: 50, buttons: 1 })
-      fireEvent.mouseMove(canvasEl, { clientX: from - moveOffset, clientY: 60, buttons: 1 })
-      fireEvent.click(canvasEl, { clientX: from - moveOffset, clientY: 60 })
+      fireEvent.mouseDown(canvasEl, { clientX: range_from, clientY: 50, buttons: 1 })
+      fireEvent.mouseMove(canvasEl, { clientX: range_from - moveOffset, clientY: 60, buttons: 1 })
+      fireEvent.click(canvasEl, { clientX: range_from - moveOffset, clientY: 60 })
 
       expect(pushMock).toHaveBeenCalledTimes(1)
     })
@@ -439,11 +439,11 @@ describe('AudioAnnotator.tsx', () => {
       expect(wave.args[name]).toMatchObject(items)
       const canvasEl = container.querySelector('canvas')!
       const moveOffset = 5
-      const { to } = items[0]
+      const { range_to } = items[0]
       fireEvent.click(canvasEl, { clientX: 10, clientY: 50 })
-      fireEvent.mouseDown(canvasEl, { clientX: to, clientY: 50, buttons: 1 })
-      fireEvent.mouseMove(canvasEl, { clientX: to + moveOffset, clientY: 60, buttons: 1 })
-      fireEvent.click(canvasEl, { clientX: to + moveOffset, clientY: 60 })
+      fireEvent.mouseDown(canvasEl, { clientX: range_to, clientY: 50, buttons: 1 })
+      fireEvent.mouseMove(canvasEl, { clientX: range_to + moveOffset, clientY: 60, buttons: 1 })
+      fireEvent.click(canvasEl, { clientX: range_to + moveOffset, clientY: 60 })
 
       expect(pushMock).toHaveBeenCalledTimes(1)
     })
