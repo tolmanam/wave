@@ -180,9 +180,9 @@ const
       [tooltipProps, setTooltipProps] = React.useState<TooltipProps | null>(null),
       theme = Fluent.useTheme(),
       colorsMap = React.useMemo(() => new Map<S, TagColor>(tags.map(tag => {
-        const { r, g, b } = Fluent.getColorFromString(cssVarValue(tag.color))!
+        const color = Fluent.getColorFromString(cssVarValue(tag.color))
         return [tag.name, {
-          transparent: `rgba(${r}, ${g}, ${b}, 0.5)`,
+          transparent: color ? `rgba(${color.r}, ${color.g}, ${color.b}, 0.5)` : cssVarValue(tag.color),
           color: cssVarValue(tag.color),
           label: tag.label
         }]

@@ -157,8 +157,8 @@ export const XImageAnnotator = ({ model }: { model: ImageAnnotator }) => {
   const
     theme = Fluent.useTheme(),
     colorsMap = React.useMemo(() => new Map<S, S>(model.tags.map(tag => {
-      const { r, g, b } = Fluent.getColorFromString(cssVarValue(tag.color))!
-      return [tag.name, `rgba(${r}, ${g}, ${b}, 1)`]
+      const color = Fluent.getColorFromString(cssVarValue(tag.color))
+      return [tag.name, `rgba(${color?.r || 0}, ${color?.g || 0}, ${color?.b || 0}, 1)`]
       // eslint-disable-next-line react-hooks/exhaustive-deps
     })), [model.tags, theme]),
     [activeTag, setActiveTag] = React.useState<S>(model.tags[0]?.name || ''),
