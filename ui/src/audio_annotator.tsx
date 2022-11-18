@@ -197,7 +197,6 @@ const
         return currmax
       },
       recalculateAnnotations = () => {
-        if (annotations.length < 2) return
         let currMaxDepth = 1
         for (let i = 0; i < annotations.length; i++) {
           const annotation = annotations[i]
