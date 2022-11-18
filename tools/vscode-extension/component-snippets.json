@@ -16,7 +16,7 @@
   "Wave AudioAnnotatorItem": {
     "prefix": "w_audio_annotator_item",
     "body": [
-      "ui.audio_annotator_item(range_from=$1, range_to=$2, tag='$3'),$0"
+      "ui.audio_annotator_item(start=$1, end=$2, tag='$3'),$0"
     ],
     "description": "Create a minimal Wave AudioAnnotatorItem."
   },
@@ -961,7 +961,7 @@
   "Wave Full AudioAnnotatorItem": {
     "prefix": "w_full_audio_annotator_item",
     "body": [
-      "ui.audio_annotator_item(range_from=$1, range_to=$2, tag='$3'),$0"
+      "ui.audio_annotator_item(start=$1, end=$2, tag='$3'),$0"
     ],
     "description": "Create a full Wave AudioAnnotatorItem."
   },
