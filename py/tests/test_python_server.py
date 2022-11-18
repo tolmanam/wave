@@ -374,12 +374,12 @@ class TestPythonServer(unittest.TestCase):
         assert d2['qux'] == d1['qux']
 
 
-    # def test_multipart_server(self):
-    #     file_handle = open('../assets/brand/wave.svg', 'r')
-    #     p = site.uplink('test_stream', 'image/svg+xml', file_handle)
-    #     site.unlink('test_stream')
-    #     file_handle.close()
-    #     assert len(p) > 0
+    def test_multipart_server(self):
+        file_handle = open('../assets/brand/wave.svg', 'rb')
+        p = site.uplink('test_stream', 'image/svg+xml', file_handle)
+        site.unlink('test_stream')
+        file_handle.close()
+        assert len(p) > 0
 
     def test_upload_dir(self):
         upload_path, = site.upload_dir(os.path.join('tests', 'test_folder'))
