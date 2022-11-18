@@ -6,7 +6,7 @@ import { getPolygonPointCursor, isIntersectingPolygon, PolygonAnnotator } from '
 import { getRectCornerCursor, isIntersectingRect, RectAnnotator } from './image_annotator_rect'
 import { eventToCursor } from './parts/annotator_utils'
 import { AnnotatorTags } from './text_annotator'
-import { clas, cssVar, cssVarValue, px, rgb } from './theme'
+import { clas, cssVar, cssVarValue, px } from './theme'
 import { wave } from './ui'
 
 /** Create a polygon annotation point with x and y coordinates.. */
@@ -155,10 +155,12 @@ const
 
 export const XImageAnnotator = ({ model }: { model: ImageAnnotator }) => {
   const
+    theme = Fluent.useTheme(),
     colorsMap = React.useMemo(() => new Map<S, S>(model.tags.map(tag => {
-      const [R, G, B] = rgb(cssVarValue(tag.color))
-      return [tag.name, `rgba(${R}, ${G}, ${B}, 1)`]
-    })), [model.tags]),
+      const { r, g, b } = Fluent.getColorFromString(cssVarValue(tag.color))!
+      return [tag.name, `rgba(${r}, ${g}, ${b}, 1)`]
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    })), [model.tags, theme]),
     [activeTag, setActiveTag] = React.useState<S>(model.tags[0]?.name || ''),
     [activeShape, setActiveShape] = React.useState<keyof ImageAnnotatorShape | 'select'>('select'),
     // TODO: Think about making this a ref instead of state.

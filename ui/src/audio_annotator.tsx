@@ -7,7 +7,7 @@ import { isIntersectingRect } from './image_annotator_rect'
 import { eventToCursor } from './parts/annotator_utils'
 import { MicroBars } from './parts/microbars'
 import { AnnotatorTags } from './text_annotator'
-import { cssVar, cssVarValue, rgb } from './theme'
+import { cssVar, cssVarValue } from './theme'
 import { wave } from './ui'
 
 /** Create a unique tag type for use in an audio annotator. */
@@ -180,9 +180,9 @@ const
       [tooltipProps, setTooltipProps] = React.useState<TooltipProps | null>(null),
       theme = Fluent.useTheme(),
       colorsMap = React.useMemo(() => new Map<S, TagColor>(tags.map(tag => {
-        const [R, G, B] = rgb(cssVarValue(tag.color))
+        const { r, g, b } = Fluent.getColorFromString(cssVarValue(tag.color))!
         return [tag.name, {
-          transparent: `rgba(${R}, ${G}, ${B}, 0.5)`,
+          transparent: `rgba(${r}, ${g}, ${b}, 0.5)`,
           color: cssVarValue(tag.color),
           label: tag.label
         }]
@@ -572,7 +572,7 @@ export const XAudioAnnotator = ({ model }: { model: AudioAnnotator }) => {
                 iconProps: { iconName: 'DependencyRemove', styles: { root: { fontSize: 20 } } },
               },
               {
-                key: 'remove-all',
+                key: 'remove',
                 text: 'Remove selected',
                 onClick: removeAnnotation,
                 disabled: annotations.every(a => !a.isFocused),
@@ -620,7 +620,7 @@ export const XAudioAnnotator = ({ model }: { model: AudioAnnotator }) => {
                 />
               </div>
               <div className={css.controlBarItem} style={{ justifyContent: 'flex-end', marginTop: 4 }}>
-                <div >{formatTime(currentTime)} / {formatTime(duration)}</div>
+                {formatTime(currentTime)} / {formatTime(duration)}
               </div>
             </div>
           </>
