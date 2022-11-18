@@ -2936,6 +2936,7 @@ ui_audio_annotator_item <- function(
 #' This component allows annotating and labeling parts of audio file.
 #'
 #' @param name An identifying name for this component.
+#' @param title The audio annotator's title.
 #' @param src The source of the audio. We advise using mp3 or wav formats to achieve the best cross-browser experience. See https://caniuse.com/?search=audio%20format for other formats.
 #' @param tags The master list of tags that can be used for annotations.
 #' @param items Annotations to display on the image, if any.
@@ -2944,17 +2945,20 @@ ui_audio_annotator_item <- function(
 #' @export
 ui_audio_annotator <- function(
   name,
+  title,
   src,
   tags,
   items = NULL,
   trigger = NULL) {
   .guard_scalar("name", "character", name)
+  .guard_scalar("title", "character", title)
   .guard_scalar("src", "character", src)
   .guard_vector("tags", "WaveAudioAnnotatorTag", tags)
   .guard_vector("items", "WaveAudioAnnotatorItem", items)
   .guard_scalar("trigger", "logical", trigger)
   .o <- list(audio_annotator=list(
     name=name,
+    title=title,
     src=src,
     tags=tags,
     items=items,

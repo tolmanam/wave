@@ -2528,6 +2528,7 @@ def audio_annotator_item(
 
 def audio_annotator(
         name: str,
+        title: str,
         src: str,
         tags: List[AudioAnnotatorTag],
         items: Optional[List[AudioAnnotatorItem]] = None,
@@ -2539,6 +2540,7 @@ def audio_annotator(
 
     Args:
         name: An identifying name for this component.
+        title: The audio annotator's title.
         src: The source of the audio. We advise using mp3 or wav formats to achieve the best cross-browser experience. See https://caniuse.com/?search=audio%20format for other formats.
         tags: The master list of tags that can be used for annotations.
         items: Annotations to display on the image, if any.
@@ -2548,6 +2550,7 @@ def audio_annotator(
     """
     return Component(audio_annotator=AudioAnnotator(
         name,
+        title,
         src,
         tags,
         items,

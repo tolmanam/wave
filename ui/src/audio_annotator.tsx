@@ -7,7 +7,7 @@ import { isIntersectingRect } from './image_annotator_rect'
 import { eventToCursor } from './parts/annotator_utils'
 import { MicroBars } from './parts/microbars'
 import { AnnotatorTags } from './text_annotator'
-import { cssVar, cssVarValue } from './theme'
+import { clas, cssVar, cssVarValue } from './theme'
 import { wave } from './ui'
 
 /** Create a unique tag type for use in an audio annotator. */
@@ -37,7 +37,9 @@ interface AudioAnnotatorItem {
  */
 export interface AudioAnnotator {
   /** An identifying name for this component. */
-  name: Id
+  name: Id,
+  /** The audio annotator's title. */
+  title: S
   /** The source of the audio. We advise using mp3 or wav formats to achieve the best cross-browser experience. See https://caniuse.com/?search=audio%20format for other formats. */
   src: S
   /** The master list of tags that can be used for annotations. */
@@ -85,6 +87,10 @@ const
       display: 'flex',
       flexDirection: 'column',
       justifyContent: 'center'
+    },
+    title: {
+      color: cssVar('$neutralPrimary'),
+      marginBottom: 8
     },
     waveForm: {
       position: 'absolute',
@@ -557,6 +563,7 @@ export const XAudioAnnotator = ({ model }: { model: AudioAnnotator }) => {
 
   return (
     <div data-test={model.name} className={css.body}>
+      <div className={clas('wave-s16 wave-w6', css.title)}>{model.title}</div>
       <audio hidden ref={audioRef} onEnded={onAudioEnded}></audio>
       {
         waveFormData ? (

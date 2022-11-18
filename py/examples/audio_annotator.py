@@ -23,6 +23,7 @@ async def serve(q: Q):
         q.page['example'] = ui.form_card(box='1 1 7 -1', items=[
             ui.audio_annotator(
                 name='annotator',
+                title='Drag to annotate',
                 src=q.app.uploaded_mp3,
                 tags=[
                     ui.audio_annotator_tag(name='m', label='Flute', color='$blue'),

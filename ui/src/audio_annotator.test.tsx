@@ -25,6 +25,7 @@ const
   ],
   model: AudioAnnotator = {
     name,
+    title: name,
     src: '',
     tags: [
       { name: 'tag1', label: 'Tag 1', color: 'red' },
