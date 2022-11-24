@@ -61,14 +61,15 @@ type RangeAnnotator = {
   focusAnnotation: (annotation: DrawnAudioAnnotatorItem) => void
 }
 type DrawnAudioAnnotatorItem = AudioAnnotatorItem & {
-  canvasHeight: U,
-  canvasY: U,
+  canvasHeight: U
+  canvasY: U
   isFocused?: B
 }
 type DraggedAnnotation = {
-  from: U,
-  to: U,
-  action?: 'resize-from' | 'resize-to' | 'move' | 'new',
+  from: U
+  to: U
+  action?: 'resize' | 'move' | 'new'
+  resized?: 'from' | 'to'
   intersected?: DrawnAudioAnnotatorItem
 }
 type TooltipProps = { title: S, range: S, top: U, left: U }
@@ -146,9 +147,18 @@ const
       .filter((v, i) => v !== "00" || i > 0)
       .join(":")
   },
-  getIntersectingEdge = (x: U, { start, end }: DrawnAudioAnnotatorItem) => {
-    if (Math.abs(start - x) <= ANNOTATION_HANDLE_OFFSET) return 'resize-from'
-    if (Math.abs(end - x) <= ANNOTATION_HANDLE_OFFSET) return 'resize-to'
+  getIntersectingEdge = (x: U, intersected?: DrawnAudioAnnotatorItem) => {
+    if (!intersected) return
+    const { start, end } = intersected
+    if (Math.abs(start - x) <= ANNOTATION_HANDLE_OFFSET) return 'from'
+    if (Math.abs(end - x) <= ANNOTATION_HANDLE_OFFSET) return 'to'
+  },
+  getResized = (cursor_x: F, min: F, max: F) => {
+    return cursor_x === min
+      ? 'from'
+      : cursor_x === max
+        ? 'to'
+        : undefined
   },
   isAnnotationIntersecting = (a1: DrawnAudioAnnotatorItem, a2: DrawnAudioAnnotatorItem) => {
     return (a2.start >= a1.start && a2.start <= a1.end) || (a1.start >= a2.start && a1.start <= a2.end)
@@ -242,7 +252,6 @@ const
 
         // Draw track.
         const trackPosition = canvas.width * percentPlayed
-        // TODO: Change to normal color.
         ctx.fillStyle = cssVarValue('$themeDark')
         ctx.fillRect(trackPosition, 0, TRACK_WIDTH, WAVEFORM_HEIGHT)
       },
@@ -252,8 +261,9 @@ const
         if (!canvas) return
         const { cursor_x, cursor_y } = eventToCursor(e, canvas.getBoundingClientRect())
         const intersected = getIntersectedAnnotation(annotations, cursor_x, cursor_y)
-        const action = intersected?.isFocused ? getIntersectingEdge(cursor_x, intersected) || 'move' : undefined
-        currDrawnAnnotation.current = { from: cursor_x, to: cursor_x, action, intersected }
+        const resized = getIntersectingEdge(cursor_x, intersected)
+        const action = intersected?.isFocused ? (resized && 'resize') || 'move' : undefined
+        currDrawnAnnotation.current = { from: cursor_x, to: cursor_x, action, intersected, resized }
       },
       onMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
         const canvas = canvasRef.current
@@ -282,10 +292,17 @@ const
         let tooltipTo = 0
         const { action, intersected: currIntersected } = currDrawnAnnotation.current
         if (action === 'new') {
-          const { start, end } = createAnnotation(currDrawnAnnotation.current.from, cursor_x, activeTag)
+          const { from, to, resized } = currDrawnAnnotation.current
+          const min = Math.min(from, to, cursor_x)
+          const max = Math.max(from, to, cursor_x)
+          const newFrom = resized === 'from' ? cursor_x : min
+          const newTo = resized === 'to' ? cursor_x : max
+          const { start, end } = createAnnotation(newFrom, newTo, activeTag)
           tooltipFrom = start
           tooltipTo = end
           currDrawnAnnotation.current = { from: start, to: end, action: 'new' }
+          currDrawnAnnotation.current.resized = getResized(cursor_x, min, max) || currDrawnAnnotation.current.resized
+          canvas.style.cursor = 'ew-resize'
         }
         else if (action === 'move' && currIntersected) {
           const movedOffset = cursor_x - currDrawnAnnotation.current.from
@@ -294,17 +311,19 @@ const
           tooltipFrom = currIntersected.start
           tooltipTo = currIntersected.end
           currDrawnAnnotation.current.from += movedOffset
+          canvas.style.cursor = 'move'
         }
-        else if (action === 'resize-from' && currIntersected) {
-          currIntersected.start = cursor_x
-          tooltipFrom = currIntersected.start
-          tooltipTo = currIntersected.end
-          canvas.style.cursor = 'ew-resize'
-        }
-        else if (action === 'resize-to' && currIntersected) {
-          currIntersected.end = cursor_x
-          tooltipFrom = currIntersected.start
-          tooltipTo = currIntersected.end
+        else if (action === 'resize' && currIntersected) {
+          const { resized } = currDrawnAnnotation.current
+          if (resized === 'from') currIntersected.start = cursor_x
+          else if (resized === 'to') currIntersected.end = cursor_x
+
+          const min = Math.min(currIntersected.start, currIntersected.end, cursor_x)
+          const max = Math.max(currIntersected.start, currIntersected.end, cursor_x)
+          currDrawnAnnotation.current.resized = getResized(cursor_x, min, max) || currDrawnAnnotation.current.resized
+
+          tooltipFrom = min
+          tooltipTo = max
           canvas.style.cursor = 'ew-resize'
         }
 
@@ -345,11 +364,12 @@ const
 
         let newAnnotation
         if (action === 'new') {
-          const annotationWidth = Math.abs(currDrawnAnnotation.current.from - cursor_x)
+          const { from, to } = currDrawnAnnotation.current
+          const annotationWidth = Math.abs(from - to)
           if (annotationWidth < MIN_ANNOTATION_WIDTH) return
-          newAnnotation = createAnnotation(currDrawnAnnotation.current.from, cursor_x, activeTag)
+          newAnnotation = createAnnotation(from, to, activeTag)
         }
-        else if (action === 'resize-from' || action === 'resize-to') {
+        else if (action === 'resize') {
           const resized = currDrawnAnnotation.current.intersected
           if (resized) {
             const { start, end } = resized
@@ -360,7 +380,7 @@ const
         onAnnotate(newAnnotation)
 
         currDrawnAnnotation.current = undefined
-        if (action === 'move' || action === 'resize-from' || action === 'resize-to') recalculateAnnotations()
+        if (action === 'move' || action === 'resize') recalculateAnnotations()
         redrawAnnotations()
       },
       init = () => {

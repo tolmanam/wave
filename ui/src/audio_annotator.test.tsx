@@ -39,7 +39,7 @@ class MockAudioContext {
   createGain = () => ({ gain: {} })
   createMediaElementSource = () => this
   connect = () => this
-  decodeAudioData = () => ({ duration: 1, getChannelData: () => [1] })
+  decodeAudioData = () => ({ duration: 100, getChannelData: () => [1] })
 }
 
 describe('AudioAnnotator.tsx', () => {
@@ -96,6 +96,18 @@ describe('AudioAnnotator.tsx', () => {
       fireEvent.mouseDown(canvasEl, { clientX: 30, clientY: 10, buttons: 1 })
       fireEvent.mouseMove(canvasEl, { clientX: 40, clientY: 20, buttons: 1 })
       fireEvent.click(canvasEl, { clientX: 40, clientY: 20, buttons: 1 })
+
+      expect(wave.args[name]).toHaveLength(3)
+      expect(wave.args[name]).toMatchObject([items[0], { tag: 'tag1', start: 30, end: 40 }, items[1]])
+    })
+
+    it('Draws a new annotation from right to left', async () => {
+      const { container } = render(<XAudioAnnotator model={model} />)
+      await waitForComponentLoad()
+      const canvasEl = container.querySelector('canvas')!
+      fireEvent.mouseDown(canvasEl, { clientX: 40, clientY: 20, buttons: 1 })
+      fireEvent.mouseMove(canvasEl, { clientX: 30, clientY: 10, buttons: 1 })
+      fireEvent.click(canvasEl, { clientX: 30, clientY: 10, buttons: 1 })
 
       expect(wave.args[name]).toHaveLength(3)
       expect(wave.args[name]).toMatchObject([items[0], { tag: 'tag1', start: 30, end: 40 }, items[1]])
@@ -318,11 +330,12 @@ describe('AudioAnnotator.tsx', () => {
 
   describe('Tooltip', () => {
     it('Shows tooltip when hovering over annotation', async () => {
-      const { container, getByTestId } = render(<XAudioAnnotator model={model} />)
+      const { container, getByTestId, queryByText } = render(<XAudioAnnotator model={model} />)
       await waitForComponentLoad()
       const canvasEl = container.querySelector('canvas')!
       fireEvent.mouseMove(canvasEl, { clientX: 3, clientY: 3 })
       expect(getByTestId('audio-annotator-tooltip')).toBeVisible()
+      expect(queryByText('00:00.00 - 00:20.00')).toBeVisible()
     })
 
     it('Does not show tooltip when not hovering over annotation', async () => {
@@ -334,16 +347,17 @@ describe('AudioAnnotator.tsx', () => {
     })
 
     it('Shows tooltip while drawing a new annotation', async () => {
-      const { container, getByTestId } = render(<XAudioAnnotator model={model} />)
+      const { container, getByTestId, queryByText } = render(<XAudioAnnotator model={model} />)
       await waitForComponentLoad()
       const canvasEl = container.querySelector('canvas')!
       fireEvent.mouseDown(canvasEl, { clientX: 30, clientY: 10, buttons: 1 })
       fireEvent.mouseMove(canvasEl, { clientX: 40, clientY: 20, buttons: 1 })
       expect(getByTestId('audio-annotator-tooltip')).toBeVisible()
+      expect(queryByText('00:30.00 - 00:40.00')).toBeVisible()
     })
 
     it('Shows tooltip while moving an annotation', async () => {
-      const { container, getByTestId } = render(<XAudioAnnotator model={model} />)
+      const { container, getByTestId, queryByText } = render(<XAudioAnnotator model={model} />)
       await waitForComponentLoad()
       const canvasEl = container.querySelector('canvas')!
       const moveOffset = 5
@@ -351,10 +365,11 @@ describe('AudioAnnotator.tsx', () => {
       fireEvent.mouseDown(canvasEl, { clientX: 10, clientY: 50, buttons: 1 })
       fireEvent.mouseMove(canvasEl, { clientX: 10 + moveOffset, clientY: 60, buttons: 1 })
       expect(getByTestId('audio-annotator-tooltip')).toBeVisible()
+      expect(queryByText('00:05.00 - 00:25.00')).toBeVisible()
     })
 
     it('Shows tooltip while resizing an annotation "from"', async () => {
-      const { container, getByTestId } = render(<XAudioAnnotator model={model} />)
+      const { container, getByTestId, queryByText } = render(<XAudioAnnotator model={model} />)
       await waitForComponentLoad()
       const canvasEl = container.querySelector('canvas')!
       const moveOffset = 5
@@ -363,10 +378,24 @@ describe('AudioAnnotator.tsx', () => {
       fireEvent.mouseDown(canvasEl, { clientX: start, clientY: 50, buttons: 1 })
       fireEvent.mouseMove(canvasEl, { clientX: start - moveOffset, clientY: 60, buttons: 1 })
       expect(getByTestId('audio-annotator-tooltip')).toBeVisible()
+      expect(queryByText('00:55.00 - 01:30.00')).toBeVisible()
+    })
+
+    it('Shows correct tooltip while resizing an annotation "from" and exceeds "to"', async () => {
+      const { container, getByTestId, queryByText } = render(<XAudioAnnotator model={model} />)
+      await waitForComponentLoad()
+      const canvasEl = container.querySelector('canvas')!
+      const moveOffset = 5
+      const { start, end } = items[1]
+      fireEvent.click(canvasEl, { clientX: 70, clientY: 50 })
+      fireEvent.mouseDown(canvasEl, { clientX: start, clientY: 50, buttons: 1 })
+      fireEvent.mouseMove(canvasEl, { clientX: start + (end - start) + moveOffset, clientY: 60, buttons: 1 })
+      expect(getByTestId('audio-annotator-tooltip')).toBeVisible()
+      expect(queryByText('01:30.00 - 01:35.00')).toBeVisible()
     })
 
     it('Shows tooltip while resizing an annotation "to"', async () => {
-      const { container, getByTestId } = render(<XAudioAnnotator model={model} />)
+      const { container, getByTestId, queryByText } = render(<XAudioAnnotator model={model} />)
       await waitForComponentLoad()
       const canvasEl = container.querySelector('canvas')!
       const moveOffset = 5
@@ -375,8 +404,20 @@ describe('AudioAnnotator.tsx', () => {
       fireEvent.mouseDown(canvasEl, { clientX: end, clientY: 50, buttons: 1 })
       fireEvent.mouseMove(canvasEl, { clientX: end + moveOffset, clientY: 60, buttons: 1 })
       expect(getByTestId('audio-annotator-tooltip')).toBeVisible()
+      expect(queryByText('00:00.00 - 00:25.00')).toBeVisible()
     })
 
+    it('Shows correct tooltip while resizing an annotation "to" and exceeds "from"', async () => {
+      const { container, getByTestId, queryByText } = render(<XAudioAnnotator model={model} />)
+      await waitForComponentLoad()
+      const canvasEl = container.querySelector('canvas')!
+      const { end } = items[1]
+      fireEvent.click(canvasEl, { clientX: 70, clientY: 50 })
+      fireEvent.mouseDown(canvasEl, { clientX: end, clientY: 50, buttons: 1 })
+      fireEvent.mouseMove(canvasEl, { clientX: 50, clientY: 60, buttons: 1 })
+      expect(getByTestId('audio-annotator-tooltip')).toBeVisible()
+      expect(queryByText('00:50.00 - 01:00.00')).toBeVisible()
+    })
   })
   describe('Wave trigger', () => {
     const pushMock = jest.fn()
