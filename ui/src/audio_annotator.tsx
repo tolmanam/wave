@@ -61,6 +61,8 @@ type RangeAnnotator = {
   focusAnnotation: (annotation: DrawnAudioAnnotatorItem) => void
 }
 type DrawnAudioAnnotatorItem = AudioAnnotatorItem & {
+  canvasStart: F
+  canvasEnd: F
   canvasHeight: U
   canvasY: U
   isFocused?: B
@@ -161,21 +163,24 @@ const
         : undefined
   },
   isAnnotationIntersecting = (a1: DrawnAudioAnnotatorItem, a2: DrawnAudioAnnotatorItem) => {
-    return (a2.start >= a1.start && a2.start <= a1.end) || (a1.start >= a2.start && a1.start <= a2.end)
+    const { start: start1, end: end1 } = a1
+    const { start: start2, end: end2 } = a2
+    return (start2 >= start1 && start2 <= end1) || (start1 >= start2 && start1 <= end2)
   },
-  createAnnotation = (start: U, end: U, tag: S) => ({
-    start: Math.min(start, end),
-    end: Math.max(start, end),
-    tag,
-    canvasHeight: WAVEFORM_HEIGHT,
-    canvasY: 0
-  }),
+  canvasUnitsToSeconds = (canvasUnit: F, canvasWidth: F, duration: F) => +(canvasUnit / canvasWidth * duration).toFixed(2),
+  createAnnotation = (from: U, to: U, tag: S, canvasWidth: F, duration: F): DrawnAudioAnnotatorItem => {
+    const canvasStart = Math.min(from, to)
+    const canvasEnd = Math.max(from, to)
+    const start = canvasUnitsToSeconds(from, canvasWidth, duration)
+    const end = canvasUnitsToSeconds(to, canvasWidth, duration)
+    return { canvasStart, canvasEnd, start, end, tag, canvasHeight: WAVEFORM_HEIGHT, canvasY: 0 }
+  },
   getIntersectedAnnotation = (annotations: DrawnAudioAnnotatorItem[], x: U, y: U) => {
-    return annotations.find(a => isIntersectingRect(x, y, { x1: a.start, x2: a.end, y1: a.canvasY, y2: a.canvasHeight + a.canvasY }))
+    return annotations.find(a => isIntersectingRect(x, y, { x1: a.canvasStart, x2: a.canvasEnd, y1: a.canvasY, y2: a.canvasHeight + a.canvasY }))
   },
   getCanvasDimensions = (intersections: DrawnAudioAnnotatorItem[], annotation: DrawnAudioAnnotatorItem, maxDepth?: U) => {
     const verticalIntersections = intersections
-      .filter(a => a !== annotation && annotation.start >= a.start && annotation.start <= a.end)
+      .filter(a => a !== annotation && annotation.canvasStart >= a.canvasStart && annotation.canvasStart <= a.canvasEnd)
       .sort((a, b) => a.canvasY - b.canvasY)
     let canvasY = 0
     let j = 0
@@ -206,8 +211,8 @@ const
       })), [tags, theme]),
       getMaxDepth = (idx: U, annotation: DrawnAudioAnnotatorItem, currMax: U) => {
         // TODO: Super ugly perf-wise.
-        let currmax = annotations.filter(a => annotation.start >= a.start && annotation.start <= a.end).length
-        for (let j = idx + 1; annotations[j]?.start >= annotation?.start && annotations[j]?.start <= annotation?.end; j++) {
+        let currmax = annotations.filter(a => annotation.canvasStart >= a.canvasStart && annotation.canvasStart <= a.canvasEnd).length
+        for (let j = idx + 1; annotations[j]?.canvasStart >= annotation?.canvasStart && annotations[j]?.canvasStart <= annotation?.canvasEnd; j++) {
           currmax = Math.max(currmax, getMaxDepth(j, annotations[j], currMax + 1))
         }
         return currmax
@@ -218,7 +223,7 @@ const
           const annotation = annotations[i]
           // TODO: Super ugly perf-wise.
           const intersections = annotations.filter(a => a !== annotation && isAnnotationIntersecting(a, annotation))
-          const bottomIntersections = intersections.filter(a => a !== annotation && a.start >= annotation.start && a.start <= annotation.end).length
+          const bottomIntersections = intersections.filter(a => a !== annotation && a.canvasStart >= annotation.canvasStart && a.canvasStart <= annotation.canvasEnd).length
           // TODO: Add memoization.
           const maxDepth = getMaxDepth(i, annotation, 1)
           const shouldFillRemainingSpace = !bottomIntersections || maxDepth < currMaxDepth
@@ -234,13 +239,13 @@ const
         const ctx = ctxRef.current
         if (!ctx || !canvas) return
         ctx.clearRect(0, 0, canvas.width, canvas.height)
-        annotations.forEach(({ start, end, tag, canvasHeight, canvasY, isFocused }) => {
+        annotations.forEach(({ canvasStart, canvasEnd, tag, canvasHeight, canvasY, isFocused }) => {
           ctx.fillStyle = colorsMap.get(tag)?.transparent || 'red'
-          ctx.fillRect(start, canvasY, end - start, canvasHeight)
+          ctx.fillRect(canvasStart, canvasY, canvasEnd - canvasStart, canvasHeight)
           if (isFocused) {
             ctx.strokeStyle = colorsMap.get(tag)?.color || 'red'
             ctx.lineWidth = 3
-            ctx.strokeRect(start, canvasY, end - start, canvasHeight)
+            ctx.strokeRect(canvasStart, canvasY, canvasEnd - canvasStart, canvasHeight)
           }
         })
 
@@ -274,7 +279,7 @@ const
         const intersected = getIntersectedAnnotation(annotations, cursor_x, cursor_y)
         setTooltipProps(!intersected ? null : {
           title: colorsMap.get(intersected.tag)?.label || '',
-          range: `${formatTime(intersected.start / canvas.width * duration)} - ${formatTime(intersected.end / canvas.width * duration)}`,
+          range: `${formatTime(intersected.start)} - ${formatTime(intersected.end)}`,
           top: cursor_y + TOP_TOOLTIP_OFFSET,
           left: cursor_x + LEFT_TOOLTIP_OFFSET
         })
@@ -295,9 +300,8 @@ const
           const { from, to, resized } = currDrawnAnnotation.current
           const min = Math.min(from, to, cursor_x)
           const max = Math.max(from, to, cursor_x)
-          const newFrom = resized === 'from' ? cursor_x : min
-          const newTo = resized === 'to' ? cursor_x : max
-          const { start, end } = createAnnotation(newFrom, newTo, activeTag)
+          const start = resized === 'from' ? cursor_x : min
+          const end = resized === 'to' ? cursor_x : max
           tooltipFrom = start
           tooltipTo = end
           currDrawnAnnotation.current = { from: start, to: end, action: 'new' }
@@ -306,20 +310,28 @@ const
         }
         else if (action === 'move' && currIntersected) {
           const movedOffset = cursor_x - currDrawnAnnotation.current.from
-          currIntersected.start += movedOffset
-          currIntersected.end += movedOffset
-          tooltipFrom = currIntersected.start
-          tooltipTo = currIntersected.end
+          currIntersected.canvasStart += movedOffset
+          currIntersected.canvasEnd += movedOffset
+          currIntersected.start = canvasUnitsToSeconds(currIntersected.start + movedOffset, canvasRef.current.width, duration)
+          currIntersected.end = canvasUnitsToSeconds(currIntersected.end + movedOffset, canvasRef.current.width, duration)
+          tooltipFrom = currIntersected.canvasStart
+          tooltipTo = currIntersected.canvasEnd
           currDrawnAnnotation.current.from += movedOffset
           canvas.style.cursor = 'move'
         }
         else if (action === 'resize' && currIntersected) {
           const { resized } = currDrawnAnnotation.current
-          if (resized === 'from') currIntersected.start = cursor_x
-          else if (resized === 'to') currIntersected.end = cursor_x
+          if (resized === 'from') {
+            currIntersected.canvasStart = cursor_x
+            currIntersected.start = canvasUnitsToSeconds(cursor_x, canvasRef.current.width, duration)
+          }
+          else if (resized === 'to') {
+            currIntersected.canvasEnd = cursor_x
+            currIntersected.end = canvasUnitsToSeconds(cursor_x, canvasRef.current.width, duration)
+          }
 
-          const min = Math.min(currIntersected.start, currIntersected.end, cursor_x)
-          const max = Math.max(currIntersected.start, currIntersected.end, cursor_x)
+          const min = Math.min(currIntersected.canvasStart, currIntersected.canvasEnd, cursor_x)
+          const max = Math.max(currIntersected.canvasStart, currIntersected.canvasEnd, cursor_x)
           currDrawnAnnotation.current.resized = getResized(cursor_x, min, max) || currDrawnAnnotation.current.resized
 
           tooltipFrom = min
@@ -367,14 +379,16 @@ const
           const { from, to } = currDrawnAnnotation.current
           const annotationWidth = Math.abs(from - to)
           if (annotationWidth < MIN_ANNOTATION_WIDTH) return
-          newAnnotation = createAnnotation(from, to, activeTag)
+          newAnnotation = createAnnotation(from, to, activeTag, canvasRef.current.width, duration)
         }
         else if (action === 'resize') {
           const resized = currDrawnAnnotation.current.intersected
           if (resized) {
-            const { start, end } = resized
-            resized.start = Math.min(start, end)
-            resized.end = Math.max(start, end)
+            const { canvasStart, canvasEnd } = resized
+            resized.canvasStart = Math.min(canvasStart, canvasEnd)
+            resized.canvasEnd = Math.max(canvasStart, canvasEnd)
+            resized.start = canvasUnitsToSeconds(resized.canvasStart, canvasRef.current.width, duration)
+            resized.end = canvasUnitsToSeconds(resized.canvasEnd, canvasRef.current.width, duration)
           }
         }
         onAnnotate(newAnnotation)
@@ -443,6 +457,10 @@ declare global {
 // Shim for AudioContext in Safari.
 window.AudioContext = window.AudioContext || window.webkitAudioContext
 
+const itemsToAnnotations = (items?: AudioAnnotatorItem[]) => (items || []).map(i => (
+  { ...i, canvasHeight: 0, canvasY: 0, canvasStart: i.start, canvasEnd: i.end }
+))
+
 export const XAudioAnnotator = ({ model }: { model: AudioAnnotator }) => {
   const
     [activeTag, setActiveTag] = React.useState(model.tags[0]?.name),
@@ -450,7 +468,7 @@ export const XAudioAnnotator = ({ model }: { model: AudioAnnotator }) => {
     [isPlaying, setIsPlaying] = React.useState(false),
     [duration, setDuration] = React.useState(0),
     [currentTime, setCurrentTime] = React.useState(0),
-    [annotations, setAnnotations] = React.useState<DrawnAudioAnnotatorItem[]>(model.items?.map(i => ({ ...i, canvasHeight: 0, canvasY: 0 })) || []),
+    [annotations, setAnnotations] = React.useState<DrawnAudioAnnotatorItem[]>(itemsToAnnotations(model.items)),
     [volumeIcon, setVolumeIcon] = React.useState('Volume3'),
     audioRef = React.useRef<HTMLAudioElement>(null),
     audioContextRef = React.useRef<AudioContext>(),
