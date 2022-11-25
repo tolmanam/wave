@@ -362,6 +362,7 @@ const
         })
       },
       onMouseLeave = () => {
+        currDrawnAnnotation.current = undefined
         redrawAnnotations()
         setTooltipProps(null)
       },
