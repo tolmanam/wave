@@ -266,6 +266,21 @@ describe('AudioAnnotator.tsx', () => {
       expect(wave.args[name]).toMatchObject(items)
     })
 
+    it('Does not move annotation beyond left border (0)', async () => {
+      const { container } = render(<XAudioAnnotator model={model} />)
+      await waitForComponentLoad()
+      expect(wave.args[name]).toMatchObject(items)
+      const canvasEl = container.querySelector('canvas')!
+      const moveOffset = 60
+      fireEvent.click(canvasEl, { clientX: 80, clientY: 50 })
+      fireEvent.mouseDown(canvasEl, { clientX: 80, clientY: 50, buttons: 1 })
+      fireEvent.mouseMove(canvasEl, { clientX: 80 - moveOffset, clientY: 60, buttons: 1 })
+      fireEvent.click(canvasEl, { clientX: 80 - moveOffset, clientY: 60 })
+
+      const { end } = items[1]
+      expect(wave.args[name]).toMatchObject([items[0], { ...items[1], start: 0, end: end - moveOffset }])
+    })
+
     it('Resizes annotation from', async () => {
       const { container } = render(<XAudioAnnotator model={model} />)
       await waitForComponentLoad()

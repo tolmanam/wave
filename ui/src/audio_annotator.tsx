@@ -310,10 +310,15 @@ const
         }
         else if (action === 'move' && currIntersected) {
           const movedOffset = cursor_x - currDrawnAnnotation.current.from
-          currIntersected.canvasStart += movedOffset
-          currIntersected.canvasEnd += movedOffset
-          currIntersected.start = canvasUnitsToSeconds(currIntersected.start + movedOffset, canvasRef.current.width, duration)
-          currIntersected.end = canvasUnitsToSeconds(currIntersected.end + movedOffset, canvasRef.current.width, duration)
+          const canvasWidth = canvasRef.current.width
+          const newCanvasStart = currIntersected.canvasStart + movedOffset
+          const newCanvasEnd = currIntersected.canvasEnd + movedOffset
+          if (newCanvasStart >= 0 && newCanvasEnd <= canvasWidth) {
+            currIntersected.canvasStart = newCanvasStart
+            currIntersected.canvasEnd = newCanvasEnd
+            currIntersected.start = canvasUnitsToSeconds(newCanvasStart, canvasWidth, duration)
+            currIntersected.end = canvasUnitsToSeconds(newCanvasEnd, canvasWidth, duration)
+          }
           tooltipFrom = currIntersected.canvasStart
           tooltipTo = currIntersected.canvasEnd
           currDrawnAnnotation.current.from += movedOffset
