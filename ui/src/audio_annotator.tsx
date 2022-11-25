@@ -206,6 +206,7 @@ const
       canvasRef = React.useRef<HTMLCanvasElement>(null),
       ctxRef = React.useRef<CanvasRenderingContext2D | null>(null),
       currDrawnAnnotation = React.useRef<DraggedAnnotation | undefined>(undefined),
+      isDefaultCanvasWidthFixed = React.useRef(false),
       [tooltipProps, setTooltipProps] = React.useState<TooltipProps | null>(null),
       theme = Fluent.useTheme(),
       colorsMap = React.useMemo(() => new Map<S, TagColor>(tags.map(tag => {
@@ -217,15 +218,15 @@ const
         }]
         // eslint-disable-next-line react-hooks/exhaustive-deps
       })), [tags, theme]),
-      getMaxDepth = (idx: U, annotation: DrawnAudioAnnotatorItem, currMax: U) => {
+      getMaxDepth = React.useCallback((idx: U, annotation: DrawnAudioAnnotatorItem, currMax: U) => {
         // TODO: Super ugly perf-wise.
         let currmax = annotations.filter(a => annotation.canvasStart >= a.canvasStart && annotation.canvasStart <= a.canvasEnd).length
         for (let j = idx + 1; annotations[j]?.canvasStart >= annotation?.canvasStart && annotations[j]?.canvasStart <= annotation?.canvasEnd; j++) {
           currmax = Math.max(currmax, getMaxDepth(j, annotations[j], currMax + 1))
         }
         return currmax
-      },
-      recalculateAnnotations = () => {
+      }, [annotations]),
+      recalculateAnnotations = React.useCallback(() => {
         let currMaxDepth = 1
         for (let i = 0; i < annotations.length; i++) {
           const annotation = annotations[i]
@@ -241,8 +242,8 @@ const
           annotation.canvasY = canvasY
           annotation.canvasHeight = canvasHeight
         }
-      },
-      redrawAnnotations = () => {
+      }, [annotations, getMaxDepth]),
+      redrawAnnotations = React.useCallback(() => {
         const canvas = canvasRef.current
         const ctx = ctxRef.current
         if (!ctx || !canvas) return
@@ -267,7 +268,7 @@ const
         const trackPosition = canvas.width * percentPlayed
         ctx.fillStyle = cssVarValue('$themeDark')
         ctx.fillRect(trackPosition, 0, TRACK_WIDTH, WAVEFORM_HEIGHT)
-      },
+      }, [activeTag, annotations, colorsMap, percentPlayed]),
       onMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
         if (e.buttons !== 1) return // Accept left-click only.
         const canvas = canvasRef.current
@@ -412,36 +413,37 @@ const
         if (action === 'move' || action === 'resize') recalculateAnnotations()
         redrawAnnotations()
       },
-      init = () => {
+      init = React.useCallback((): U | undefined => {
         // Set correct canvas coordinate system from default 300:150 since we resize canvas using CSS.
-        if (canvasRef.current) canvasRef.current.width = canvasRef.current.getBoundingClientRect().width
+        if (canvasRef.current) {
+          canvasRef.current.width = canvasRef.current.getBoundingClientRect().width
+          ctxRef.current = canvasRef.current.getContext('2d')
+          isDefaultCanvasWidthFixed.current = true
+          recalculateAnnotations()
+          redrawAnnotations()
+        }
         // If canvas is not ready or didn't resize yet, try again later.
-        if (!canvasRef.current || canvasRef.current.width === 300) return setTimeout(init, 300) as unknown as U
-        ctxRef.current = canvasRef.current.getContext('2d')
-      }
+        if (!canvasRef.current || !isDefaultCanvasWidthFixed.current) return setTimeout(init, 300) as unknown as U
+      }, [recalculateAnnotations, redrawAnnotations])
 
     React.useEffect(() => {
-      const focused = annotations.find(a => a.isFocused)
-      if (focused) {
-        focused.tag = activeTag
-        redrawAnnotations()
-      }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [activeTag])
+      window.addEventListener('resize', init)
+      return () => window.removeEventListener('resize', init)
+    }, [init])
+
     React.useEffect(() => {
+      if (!isDefaultCanvasWidthFixed.current) return
+      const focused = annotations.find(a => a.isFocused)
+      if (focused) focused.tag = activeTag
       recalculateAnnotations()
       redrawAnnotations()
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [annotations])
+    }, [activeTag, annotations, recalculateAnnotations, redrawAnnotations])
 
     React.useEffect(() => {
       const timeout = init()
       return () => window.clearTimeout(timeout)
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    React.useEffect(redrawAnnotations, [percentPlayed])
 
     return (
       <>
