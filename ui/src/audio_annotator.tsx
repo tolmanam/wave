@@ -1,5 +1,4 @@
 import * as Fluent from '@fluentui/react'
-import { IDropdownOption } from '@fluentui/react'
 import { B, F, Id, Rec, S, U } from 'h2o-wave'
 import React from 'react'
 import { stylesheet } from 'typestyle'
@@ -128,10 +127,6 @@ const
       boxShadow: `${cssVar('$text1')} 0px 6.4px 14.4px 0px, ${cssVar('$text2')} 0px 1.2px 3.6px 0px`,
       boxSizing: 'border-box',
     },
-    controlBarItem: {
-      flex: 1,
-      display: 'flex'
-    }
   }),
   speedAdjustmentOptions = [
     { key: 0.25, text: '0.25x' },
@@ -265,7 +260,7 @@ const
         }
 
         // Draw track.
-        const trackPosition = canvas.width * percentPlayed
+        const trackPosition = percentPlayed === 1 ? canvas.width - TRACK_WIDTH : canvas.width * percentPlayed
         ctx.fillStyle = cssVarValue('$themeDark')
         ctx.fillRect(trackPosition, 0, TRACK_WIDTH, WAVEFORM_HEIGHT)
       }, [activeTag, annotations, colorsMap, percentPlayed]),
@@ -565,20 +560,22 @@ export const XAudioAnnotator = ({ model }: { model: AudioAnnotator }) => {
       setIsPlaying(false)
       if (audioPositionIntervalRef.current) window.clearInterval(audioPositionIntervalRef.current)
     },
-    onPlaybackResume = () => {
-      if (isPlaying) onPlayerStateChange()
-      setCurrentTime(0)
-      if (audioRef.current) audioRef.current.currentTime = 0
-    },
+    // onPlaybackResume = () => {
+    //   if (isPlaying) onPlayerStateChange()
+    //   setCurrentTime(0)
+    //   if (audioRef.current) audioRef.current.currentTime = 0
+    // },
     onVolumeChange = (v: U) => {
       if (gainNodeRef.current) gainNodeRef.current.gain.value = v
       setVolumeIcon(v === 0 ? 'VolumeDisabled' : (v < 0.3 ? 'Volume1' : (v < 0.75 ? 'Volume2' : 'Volume3')))
     },
     onSpeedChange = (v: U) => { if (audioRef.current) audioRef.current.playbackRate = v },
-    skipToTime = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    skipToTime = (newTime?: F) => (e: React.MouseEvent<HTMLCanvasElement>) => {
       if (!audioRef.current) return
-      const xRelativeToCurrTarget = (e.pageX || 0) - e.currentTarget.getBoundingClientRect().left
-      const newTime = xRelativeToCurrTarget / e.currentTarget.width * duration
+      if (newTime === undefined) {
+        const xRelativeToCurrTarget = (e.pageX || 0) - e.currentTarget.getBoundingClientRect().left
+        newTime = xRelativeToCurrTarget / e.currentTarget.width * duration
+      }
       setCurrentTime(newTime)
       audioRef.current.currentTime = newTime
     },
@@ -650,12 +647,12 @@ export const XAudioAnnotator = ({ model }: { model: AudioAnnotator }) => {
                 tags={model.tags}
                 percentPlayed={currentTime / duration}
                 duration={duration}
-                skipToTime={skipToTime}
+                skipToTime={skipToTime()}
                 focusAnnotation={focusAnnotation}
               />
             </div>
-            <div style={{ display: 'flex' }}>
-              <div className={css.controlBarItem} style={{ justifyContent: 'flex-start' }}>
+            <Fluent.Stack horizontal horizontalAlign='space-between' styles={{ root: { position: 'relative' } }}>
+              <Fluent.Stack horizontal>
                 <Fluent.Icon iconName={volumeIcon} styles={{ root: { fontSize: 18 } }} />
                 <Fluent.Slider styles={{ root: { minWidth: 180 } }} min={0} defaultValue={1} max={2} step={0.01} onChange={onVolumeChange} valueFormat={v => `${Math.round(v * 100)}%`} />
                 <Fluent.Icon iconName={'PlaybackRate1x'} styles={{ root: { marginTop: 3, marginLeft: 6, fontSize: 18 } }} />
@@ -664,26 +661,29 @@ export const XAudioAnnotator = ({ model }: { model: AudioAnnotator }) => {
                   styles={{ title: { border: 'none', }, dropdown: { selectors: { ':focus::after': { border: 'none' } }, minWidth: 70 } }}
                   defaultSelectedKey={audioRef?.current?.playbackRate || 1}
                   options={speedAdjustmentOptions}
-                  onChange={(_ev, option: IDropdownOption | undefined) => onSpeedChange(option!.key as number)}
+                  onChange={(_ev, option) => onSpeedChange(option!.key as U)}
                 />
-              </div>
-              <div className={css.controlBarItem} style={{ justifyContent: 'center', marginTop: 12 }}>
-                <Fluent.IconButton iconProps={{ iconName: 'PlayReverseResume' }} styles={{ icon: { fontSize: 18 } }} onClick={onPlaybackResume} />
+              </Fluent.Stack>
+              <Fluent.Stack horizontal styles={{ root: { position: 'absolute', left: '50%', transform: 'translateX(-50%)', marginTop: 15 } }}>
+                <Fluent.IconButton iconProps={{ iconName: 'PlayReverseResume' }} styles={{ icon: { fontSize: 18 } }} onClick={skipToTime(0)} />
                 <Fluent.IconButton
                   iconProps={{ iconName: isPlaying ? 'Pause' : 'PlaySolid' }}
                   onClick={onPlayerStateChange}
                   styles={{
-                    // marginRight 24 centers the play button - it is the width of the PlayReverseResume button.
-                    root: { backgroundColor: cssVar('$themePrimary'), borderRadius: 50, marginRight: 24 },
+                    root: { backgroundColor: cssVar('$themePrimary'), borderRadius: 50 },
                     rootHovered: { backgroundColor: cssVar('$themeSecondary') },
                     icon: { marginBottom: 2, color: cssVar('$white'), fontSize: 18 }
                   }}
                 />
-              </div>
-              <div className={css.controlBarItem} style={{ justifyContent: 'flex-end', marginTop: 4 }}>
-                {formatTime(currentTime)} / {formatTime(duration)}
-              </div>
-            </div>
+                <Fluent.IconButton
+                  iconProps={{ iconName: 'PlayReverseResume' }}
+                  // Nudge the icon 2px down to account for improper icon cropping.
+                  styles={{ icon: { fontSize: 18 }, root: { transform: 'rotate(180deg)', position: 'relative', top: 2 } }}
+                  onClick={skipToTime(duration)}
+                />
+              </Fluent.Stack>
+              <div>{formatTime(currentTime)} / {formatTime(duration)}</div>
+            </Fluent.Stack>
           </>
         ) : <Fluent.Spinner size={Fluent.SpinnerSize.large} label='Loading audio annotator' />
       }
