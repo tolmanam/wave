@@ -151,9 +151,9 @@ const
   },
   getIntersectingEdge = (x: U, intersected?: DrawnAudioAnnotatorItem) => {
     if (!intersected) return
-    const { start, end } = intersected
-    if (Math.abs(start - x) <= ANNOTATION_HANDLE_OFFSET) return 'from'
-    if (Math.abs(end - x) <= ANNOTATION_HANDLE_OFFSET) return 'to'
+    const { canvasStart, canvasEnd } = intersected
+    if (Math.abs(canvasStart - x) <= ANNOTATION_HANDLE_OFFSET) return 'from'
+    if (Math.abs(canvasEnd - x) <= ANNOTATION_HANDLE_OFFSET) return 'to'
   },
   getResized = (cursor_x: F, min: F, max: F) => {
     return cursor_x === min
@@ -326,13 +326,14 @@ const
         }
         else if (action === 'resize' && currIntersected) {
           const { resized } = currDrawnAnnotation.current
+          const canvasWidth = canvasRef.current.width
           if (resized === 'from') {
-            currIntersected.canvasStart = cursor_x
-            currIntersected.start = canvasUnitsToSeconds(cursor_x, canvasRef.current.width, duration)
+            currIntersected.canvasStart = Math.max(cursor_x, 0)
+            currIntersected.start = canvasUnitsToSeconds(currIntersected.canvasStart, canvasWidth, duration)
           }
           else if (resized === 'to') {
-            currIntersected.canvasEnd = cursor_x
-            currIntersected.end = canvasUnitsToSeconds(cursor_x, canvasRef.current.width, duration)
+            currIntersected.canvasEnd = Math.min(cursor_x, canvasWidth)
+            currIntersected.end = canvasUnitsToSeconds(currIntersected.canvasEnd, canvasWidth, duration)
           }
 
           const min = Math.min(currIntersected.canvasStart, currIntersected.canvasEnd, cursor_x)

@@ -156,7 +156,7 @@ describe('AudioAnnotator.tsx', () => {
       const canvasEl = container.querySelector('canvas')!
       expect(wave.args[name]).toMatchObject(items)
 
-      const removeBtn = getByText('Remove selected').parentElement?.parentElement?.parentElement!
+      const removeBtn = getByText('Remove selected').parentElement!.parentElement!.parentElement!
       expect(removeBtn).toHaveAttribute('aria-disabled', 'true')
       fireEvent.click(canvasEl, { clientX: 3, clientY: 3 })
       await waitForComponentLoad()
@@ -193,6 +193,20 @@ describe('AudioAnnotator.tsx', () => {
       expect(canvasEl.style.cursor).toBe('move')
       fireEvent.mouseMove(canvasEl, { clientX: 15, clientY: 3, buttons: 1 })
       expect(canvasEl.style.cursor).toBe('move')
+    })
+
+    it('Displays resize cursor when hovering over focused annotation boundaries', async () => {
+      const { container } = render(<XAudioAnnotator model={model} />)
+      await waitForComponentLoad()
+      const canvasEl = container.querySelector('canvas')!
+      fireEvent.click(canvasEl, { clientX: 5, clientY: 0, buttons: 1 })
+      expect(canvasEl.style.cursor).toBe('move')
+      fireEvent.mouseMove(canvasEl, { clientX: 0, clientY: 0, buttons: 1 })
+      expect(canvasEl.style.cursor).toBe('ew-resize')
+      fireEvent.mouseMove(canvasEl, { clientX: 5, clientY: 0, buttons: 1 })
+      expect(canvasEl.style.cursor).toBe('move')
+      fireEvent.mouseMove(canvasEl, { clientX: 20, clientY: 0, buttons: 1 })
+      expect(canvasEl.style.cursor).toBe('ew-resize')
     })
 
     it('Displays resize cursor when resizing focused annotation', async () => {
