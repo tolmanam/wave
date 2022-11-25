@@ -83,6 +83,7 @@ const
   ANNOTATION_HANDLE_OFFSET = 3,
   TOP_TOOLTIP_OFFSET = -75,
   LEFT_TOOLTIP_OFFSET = 25,
+  TOOLTIP_WIDTH = 200,
   TRACK_WIDTH = 5,
   css = stylesheet({
     body: {
@@ -121,9 +122,11 @@ const
       zIndex: 1,
       padding: 15,
       background: cssVar('$card'),
+      width: TOOLTIP_WIDTH,
       borderRadius: 2,
       userSelect: 'none',
-      boxShadow: `${cssVar('$text1')} 0px 6.4px 14.4px 0px, ${cssVar('$text2')} 0px 1.2px 3.6px 0px`
+      boxShadow: `${cssVar('$text1')} 0px 6.4px 14.4px 0px, ${cssVar('$text2')} 0px 1.2px 3.6px 0px`,
+      boxSizing: 'border-box',
     },
     controlBarItem: {
       flex: 1,
@@ -161,6 +164,11 @@ const
       : cursor_x === max
         ? 'to'
         : undefined
+  },
+  getTooltipLeftOffset = (cursorX: F, canvasWidth: F) => {
+    return (cursorX + TOOLTIP_WIDTH + LEFT_TOOLTIP_OFFSET) > canvasWidth
+      ? cursorX - TOOLTIP_WIDTH - LEFT_TOOLTIP_OFFSET
+      : cursorX + LEFT_TOOLTIP_OFFSET
   },
   isAnnotationIntersecting = (a1: DrawnAudioAnnotatorItem, a2: DrawnAudioAnnotatorItem) => {
     const { start: start1, end: end1 } = a1
@@ -275,13 +283,14 @@ const
         const ctx = ctxRef.current
         if (!ctx || !canvas) return
 
+        const canvasWidth = canvasRef.current.width
         const { cursor_x, cursor_y } = eventToCursor(e, canvas.getBoundingClientRect())
         const intersected = getIntersectedAnnotation(annotations, cursor_x, cursor_y)
         setTooltipProps(!intersected ? null : {
           title: colorsMap.get(intersected.tag)?.label || '',
           range: `${formatTime(intersected.start)} - ${formatTime(intersected.end)}`,
           top: cursor_y + TOP_TOOLTIP_OFFSET,
-          left: cursor_x + LEFT_TOOLTIP_OFFSET
+          left: getTooltipLeftOffset(cursor_x, canvasWidth)
         })
 
         canvas.style.cursor = intersected?.isFocused
@@ -310,7 +319,6 @@ const
         }
         else if (action === 'move' && currIntersected) {
           const movedOffset = cursor_x - currDrawnAnnotation.current.from
-          const canvasWidth = canvasRef.current.width
           const newCanvasStart = currIntersected.canvasStart + movedOffset
           const newCanvasEnd = currIntersected.canvasEnd + movedOffset
           if (newCanvasStart >= 0 && newCanvasEnd <= canvasWidth) {
@@ -350,7 +358,7 @@ const
           title: colorsMap.get(activeTag)!.label,
           range: `${formatTime(tooltipFrom / canvas.width * duration)} - ${formatTime(tooltipTo / canvas.width * duration)}`,
           top: cursor_y + TOP_TOOLTIP_OFFSET,
-          left: cursor_x + LEFT_TOOLTIP_OFFSET
+          left: getTooltipLeftOffset(cursor_x, canvasWidth)
         })
       },
       onMouseLeave = () => {
