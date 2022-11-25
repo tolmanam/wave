@@ -560,11 +560,6 @@ export const XAudioAnnotator = ({ model }: { model: AudioAnnotator }) => {
       setIsPlaying(false)
       if (audioPositionIntervalRef.current) window.clearInterval(audioPositionIntervalRef.current)
     },
-    // onPlaybackResume = () => {
-    //   if (isPlaying) onPlayerStateChange()
-    //   setCurrentTime(0)
-    //   if (audioRef.current) audioRef.current.currentTime = 0
-    // },
     onVolumeChange = (v: U) => {
       if (gainNodeRef.current) gainNodeRef.current.gain.value = v
       setVolumeIcon(v === 0 ? 'VolumeDisabled' : (v < 0.3 ? 'Volume1' : (v < 0.75 ? 'Volume2' : 'Volume3')))
