@@ -80,7 +80,7 @@ const
   WAVEFORM_HEIGHT = 200,
   MIN_ANNOTATION_WIDTH = 5,
   ANNOTATION_HANDLE_OFFSET = 3,
-  TOP_TOOLTIP_OFFSET = -75,
+  TOP_TOOLTIP_OFFSET = 45,
   LEFT_TOOLTIP_OFFSET = 25,
   TOOLTIP_WIDTH = 200,
   TRACK_WIDTH = 5,
@@ -163,6 +163,9 @@ const
       ? cursorX - TOOLTIP_WIDTH - LEFT_TOOLTIP_OFFSET
       : cursorX + LEFT_TOOLTIP_OFFSET
   },
+  isAnnotationIntersectingAtEnd = (a1: DrawnAudioAnnotatorItem, a2: DrawnAudioAnnotatorItem) => {
+    return a2.canvasStart >= a1.canvasStart && a2.canvasStart <= a1.canvasEnd
+  },
   isAnnotationIntersecting = (a1: DrawnAudioAnnotatorItem, a2: DrawnAudioAnnotatorItem) => {
     const { start: start1, end: end1 } = a1
     const { start: start2, end: end2 } = a2
@@ -194,6 +197,14 @@ const
       : Math.abs(canvasY - (verticalIntersections[j]?.canvasY || WAVEFORM_HEIGHT))
     return { canvasY, canvasHeight }
   },
+  getMaxDepth = (annotations: DrawnAudioAnnotatorItem[], idx: U, annotation: DrawnAudioAnnotatorItem, currMax: U) => {
+    // TODO: Super ugly perf-wise.
+    let currmax = annotations.filter(a => annotation.canvasStart >= a.canvasStart && annotation.canvasStart <= a.canvasEnd).length
+    for (let j = idx + 1; annotations[j]?.canvasStart >= annotation?.canvasStart && annotations[j]?.canvasStart <= annotation?.canvasEnd; j++) {
+      currmax = Math.max(currmax, getMaxDepth(annotations, j, annotations[j], currMax + 1))
+    }
+    return currmax
+  },
   itemsToAnnotations = (items?: AudioAnnotatorItem[]) => (items || []).map(i => ({ ...i, canvasHeight: 0, canvasY: 0, canvasStart: i.start, canvasEnd: i.end })),
   RangeAnnotator = ({ onAnnotate, activeTag, tags, percentPlayed, skipToTime, items, duration, setActiveTag, children }: React.PropsWithChildren<RangeAnnotator>) => {
     const
@@ -202,6 +213,7 @@ const
       currDrawnAnnotation = React.useRef<DraggedAnnotation | undefined>(undefined),
       isDefaultCanvasWidthFixed = React.useRef(false),
       [tooltipProps, setTooltipProps] = React.useState<TooltipProps | null>(null),
+      // TODO: Refactor into ref instead of state.
       [annotations, setAnnotations] = React.useState<DrawnAudioAnnotatorItem[]>(itemsToAnnotations(items)),
       theme = Fluent.useTheme(),
       colorsMap = React.useMemo(() => new Map<S, TagColor>(tags.map(tag => {
@@ -213,57 +225,72 @@ const
         }]
         // eslint-disable-next-line react-hooks/exhaustive-deps
       })), [tags, theme]),
-      getMaxDepth = React.useCallback((idx: U, annotation: DrawnAudioAnnotatorItem, currMax: U) => {
-        // TODO: Super ugly perf-wise.
-        let currmax = annotations.filter(a => annotation.canvasStart >= a.canvasStart && annotation.canvasStart <= a.canvasEnd).length
-        for (let j = idx + 1; annotations[j]?.canvasStart >= annotation?.canvasStart && annotations[j]?.canvasStart <= annotation?.canvasEnd; j++) {
-          currmax = Math.max(currmax, getMaxDepth(j, annotations[j], currMax + 1))
-        }
-        return currmax
-      }, [annotations]),
-      recalculateAnnotations = React.useCallback(() => {
-        let currMaxDepth = 1
-        for (let i = 0; i < annotations.length; i++) {
-          const annotation = annotations[i]
-          // TODO: Super ugly perf-wise.
-          const intersections = annotations.filter(a => a !== annotation && isAnnotationIntersecting(a, annotation))
-          const bottomIntersections = intersections.filter(a => a !== annotation && a.canvasStart >= annotation.canvasStart && a.canvasStart <= annotation.canvasEnd).length
-          // TODO: Add memoization.
-          const maxDepth = getMaxDepth(i, annotation, 1)
-          const shouldFillRemainingSpace = !bottomIntersections || maxDepth < currMaxDepth
-          currMaxDepth = intersections.length ? Math.max(currMaxDepth, maxDepth) : 1
+      recalculateAnnotations = React.useCallback((submit = false) => {
+        setAnnotations(prev => {
+          const mergedAnnotations: DrawnAudioAnnotatorItem[] = []
+          const visited = new Set()
+          for (let i = 0; i < prev.length; i++) {
+            const currAnnotation = prev[i]
+            if (visited.has(currAnnotation)) continue
+            mergedAnnotations.push(currAnnotation)
 
-          const { canvasY, canvasHeight } = getCanvasDimensions(intersections, annotation, shouldFillRemainingSpace ? 0 : maxDepth)
-          annotation.canvasY = canvasY
-          annotation.canvasHeight = canvasHeight
-        }
-      }, [annotations, getMaxDepth]),
-      redrawAnnotations = React.useCallback(() => {
-        const canvas = canvasRef.current
-        const ctx = ctxRef.current
-        if (!ctx || !canvas) return
-        ctx.clearRect(0, 0, canvas.width, canvas.height)
-        annotations.forEach(({ canvasStart, canvasEnd, tag, canvasHeight, canvasY, isFocused }) => {
-          ctx.fillStyle = colorsMap.get(tag)?.transparent || 'red'
-          ctx.fillRect(canvasStart, canvasY, canvasEnd - canvasStart, canvasHeight)
-          if (isFocused) {
-            ctx.strokeStyle = colorsMap.get(tag)?.color || 'red'
-            ctx.lineWidth = 3
-            ctx.strokeRect(canvasStart, canvasY, canvasEnd - canvasStart, canvasHeight)
+            for (let j = i + 1; j < prev.length; j++) {
+              const nextAnnotation = prev[j]
+              if (currAnnotation.tag !== nextAnnotation.tag) continue
+              if (!isAnnotationIntersectingAtEnd(currAnnotation, nextAnnotation)) break
+              currAnnotation.end = Math.max(currAnnotation.end, nextAnnotation.end)
+              currAnnotation.canvasEnd = Math.max(currAnnotation.canvasEnd, nextAnnotation.canvasEnd)
+              visited.add(nextAnnotation)
+            }
           }
+
+          let currMaxDepth = 1
+          for (let i = 0; i < mergedAnnotations.length; i++) {
+            const annotation = mergedAnnotations[i]
+            // TODO: Super ugly perf-wise.
+            const intersections = mergedAnnotations.filter(a => a !== annotation && isAnnotationIntersecting(a, annotation))
+            const bottomIntersections = intersections.filter(a => a !== annotation && a.canvasStart >= annotation.canvasStart && a.canvasStart <= annotation.canvasEnd).length
+            const maxDepth = getMaxDepth(mergedAnnotations, i, annotation, 1)
+            const shouldFillRemainingSpace = !bottomIntersections || maxDepth < currMaxDepth
+            currMaxDepth = intersections.length ? Math.max(currMaxDepth, maxDepth) : 1
+
+            const { canvasY, canvasHeight } = getCanvasDimensions(intersections, annotation, shouldFillRemainingSpace ? 0 : maxDepth)
+            annotation.canvasY = canvasY
+            annotation.canvasHeight = canvasHeight
+          }
+          if (submit) onAnnotate(mergedAnnotations)
+          return mergedAnnotations
         })
+      }, [onAnnotate]),
+      redrawAnnotations = React.useCallback(() => {
+        setAnnotations(annotations => {
+          const canvas = canvasRef.current
+          const ctx = ctxRef.current
+          if (!ctx || !canvas) return annotations
+          ctx.clearRect(0, 0, canvas.width, canvas.height)
+          annotations.forEach(({ canvasStart, canvasEnd, tag, canvasHeight, canvasY, isFocused }) => {
+            ctx.fillStyle = colorsMap.get(tag)?.transparent || 'red'
+            ctx.fillRect(canvasStart, canvasY, canvasEnd - canvasStart, canvasHeight)
+            if (isFocused) {
+              ctx.strokeStyle = colorsMap.get(tag)?.color || 'red'
+              ctx.lineWidth = 3
+              ctx.strokeRect(canvasStart, canvasY, canvasEnd - canvasStart, canvasHeight)
+            }
+          })
 
-        if (currDrawnAnnotation.current && currDrawnAnnotation.current.action === 'new') {
-          const { from, to } = currDrawnAnnotation.current
-          ctx.fillStyle = colorsMap.get(activeTag)?.transparent || 'red'
-          ctx.fillRect(from, 0, to - from, WAVEFORM_HEIGHT)
-        }
+          if (currDrawnAnnotation.current && currDrawnAnnotation.current.action === 'new') {
+            const { from, to } = currDrawnAnnotation.current
+            ctx.fillStyle = colorsMap.get(activeTag)?.transparent || 'red'
+            ctx.fillRect(from, 0, to - from, WAVEFORM_HEIGHT)
+          }
 
-        // Draw track.
-        const trackPosition = percentPlayed === 1 ? canvas.width - TRACK_WIDTH : canvas.width * percentPlayed
-        ctx.fillStyle = cssVarValue('$themeDark')
-        ctx.fillRect(trackPosition, 0, TRACK_WIDTH, WAVEFORM_HEIGHT)
-      }, [activeTag, annotations, colorsMap, percentPlayed]),
+          // Draw track.
+          const trackPosition = percentPlayed === 1 ? canvas.width - TRACK_WIDTH : canvas.width * percentPlayed
+          ctx.fillStyle = cssVarValue('$themeDark')
+          ctx.fillRect(trackPosition, 0, TRACK_WIDTH, WAVEFORM_HEIGHT)
+          return annotations
+        })
+      }, [activeTag, colorsMap, percentPlayed]),
       onMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
         if (e.buttons !== 1) return // Accept left-click only.
         const canvas = canvasRef.current
@@ -381,12 +408,9 @@ const
           : 'pointer'
 
         if (!currDrawnAnnotation.current || !action) {
-          if (intersected) {
-            if (intersected.tag !== activeTag) setActiveTag(intersected.tag)
-            setAnnotations(prev => prev.map(a => { a.isFocused = a === intersected; return a }))
-            return
-          }
-          skipToTime(e)
+          if (intersected && intersected.tag !== activeTag) setActiveTag(intersected.tag)
+          intersected ? setAnnotations(prev => prev.map(a => { a.isFocused = a === intersected; return a })) : skipToTime(e)
+          redrawAnnotations()
           return
         }
 
@@ -395,11 +419,8 @@ const
           const annotationWidth = Math.abs(from - to)
           if (annotationWidth < MIN_ANNOTATION_WIDTH) return
           const newAnnotation = createAnnotation(from, to, activeTag, canvasRef.current.width, duration)
-          setAnnotations(prev => {
-            const newAnnotations = [...prev, newAnnotation].sort((a, b) => a.start - b.start)
-            onAnnotate(newAnnotations)
-            return newAnnotations
-          })
+          setAnnotations(prev => [...prev, newAnnotation].sort((a, b) => a.start - b.start))
+          recalculateAnnotations(true)
         }
         else if (action === 'resize') {
           const resized = currDrawnAnnotation.current.intersected
@@ -413,10 +434,7 @@ const
         }
 
         currDrawnAnnotation.current = undefined
-        if (action === 'move' || action === 'resize') {
-          recalculateAnnotations()
-          onAnnotate(annotations)
-        }
+        if (action === 'move' || action === 'resize') recalculateAnnotations(true)
         redrawAnnotations()
       },
       init = React.useCallback((): U | undefined => {
@@ -434,13 +452,12 @@ const
       reset = () => {
         setAnnotations([])
         onAnnotate([])
+        redrawAnnotations()
       },
       removeAnnotation = () => {
-        setAnnotations(prev => {
-          const newAnnotations = prev.filter(a => !a.isFocused)
-          onAnnotate(newAnnotations)
-          return newAnnotations
-        })
+        setAnnotations(prev => prev.filter(a => !a.isFocused))
+        recalculateAnnotations(true)
+        redrawAnnotations()
       }
 
     React.useEffect(() => {
@@ -458,7 +475,8 @@ const
       }
       recalculateAnnotations()
       redrawAnnotations()
-    }, [activeTag, annotations, onAnnotate, recalculateAnnotations, redrawAnnotations])
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeTag, onAnnotate, recalculateAnnotations, redrawAnnotations])
 
     React.useEffect(() => {
       const timeout = init()
@@ -666,8 +684,8 @@ export const XAudioAnnotator = ({ model }: { model: AudioAnnotator }) => {
                 />
                 <Fluent.IconButton
                   iconProps={{ iconName: 'PlayReverseResume' }}
-                  // Nudge the icon 2px down to account for improper icon cropping.
-                  styles={{ icon: { fontSize: 18 }, root: { transform: 'rotate(180deg)', marginTop: 2 } }}
+                  // Nudge the icon down to account for improper icon cropping.
+                  styles={{ icon: { fontSize: 18 }, root: { transform: 'rotate(180deg)', marginTop: 3 } }}
                   onClick={skipToTime(duration)}
                 />
               </Fluent.Stack>
