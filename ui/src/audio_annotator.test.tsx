@@ -167,7 +167,7 @@ describe('AudioAnnotator.tsx', () => {
       expect(wave.args[name]).toMatchObject([items[1]])
     })
 
-    it('Changes tag when clicked existing annotation', async () => {
+    it('Changes tag of focused annotation', async () => {
       const { container, getByText } = render(<XAudioAnnotator model={model} />)
       await waitForComponentLoad()
       const canvasEl = container.querySelector('canvas')!

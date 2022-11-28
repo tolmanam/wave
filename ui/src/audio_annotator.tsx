@@ -50,14 +50,14 @@ export interface AudioAnnotator {
 }
 
 type RangeAnnotator = {
-  annotations: DrawnAudioAnnotatorItem[]
-  onAnnotate: (annotation?: DrawnAudioAnnotatorItem) => void
+  onAnnotate: (annotations: DrawnAudioAnnotatorItem[]) => void
   activeTag: S
   tags: AudioAnnotatorTag[]
   percentPlayed: F
   duration: F
   skipToTime: (e: React.MouseEvent<HTMLCanvasElement>) => void
-  focusAnnotation: (annotation: DrawnAudioAnnotatorItem) => void
+  setActiveTag: (tag: S) => void
+  items?: AudioAnnotatorItem[]
 }
 type DrawnAudioAnnotatorItem = AudioAnnotatorItem & {
   canvasStart: F
@@ -84,12 +84,10 @@ const
   LEFT_TOOLTIP_OFFSET = 25,
   TOOLTIP_WIDTH = 200,
   TRACK_WIDTH = 5,
+  BODY_MIN_HEGHT = 370,
   css = stylesheet({
     body: {
-      minHeight: 400,
-      display: 'flex',
-      flexDirection: 'column',
-      justifyContent: 'center'
+      minHeight: BODY_MIN_HEGHT,
     },
     title: {
       color: cssVar('$neutralPrimary'),
@@ -196,13 +194,15 @@ const
       : Math.abs(canvasY - (verticalIntersections[j]?.canvasY || WAVEFORM_HEIGHT))
     return { canvasY, canvasHeight }
   },
-  RangeAnnotator = ({ onAnnotate, activeTag, tags, percentPlayed, skipToTime, annotations, focusAnnotation, duration }: RangeAnnotator) => {
+  itemsToAnnotations = (items?: AudioAnnotatorItem[]) => (items || []).map(i => ({ ...i, canvasHeight: 0, canvasY: 0, canvasStart: i.start, canvasEnd: i.end })),
+  RangeAnnotator = ({ onAnnotate, activeTag, tags, percentPlayed, skipToTime, items, duration, setActiveTag, children }: React.PropsWithChildren<RangeAnnotator>) => {
     const
       canvasRef = React.useRef<HTMLCanvasElement>(null),
       ctxRef = React.useRef<CanvasRenderingContext2D | null>(null),
       currDrawnAnnotation = React.useRef<DraggedAnnotation | undefined>(undefined),
       isDefaultCanvasWidthFixed = React.useRef(false),
       [tooltipProps, setTooltipProps] = React.useState<TooltipProps | null>(null),
+      [annotations, setAnnotations] = React.useState<DrawnAudioAnnotatorItem[]>(itemsToAnnotations(items)),
       theme = Fluent.useTheme(),
       colorsMap = React.useMemo(() => new Map<S, TagColor>(tags.map(tag => {
         const color = Fluent.getColorFromString(cssVarValue(tag.color))
@@ -381,16 +381,25 @@ const
           : 'pointer'
 
         if (!currDrawnAnnotation.current || !action) {
-          intersected ? focusAnnotation(intersected) : skipToTime(e)
+          if (intersected) {
+            if (intersected.tag !== activeTag) setActiveTag(intersected.tag)
+            setAnnotations(prev => prev.map(a => { a.isFocused = a === intersected; return a }))
+            return
+          }
+          skipToTime(e)
           return
         }
 
-        let newAnnotation
         if (action === 'new') {
           const { from, to } = currDrawnAnnotation.current
           const annotationWidth = Math.abs(from - to)
           if (annotationWidth < MIN_ANNOTATION_WIDTH) return
-          newAnnotation = createAnnotation(from, to, activeTag, canvasRef.current.width, duration)
+          const newAnnotation = createAnnotation(from, to, activeTag, canvasRef.current.width, duration)
+          setAnnotations(prev => {
+            const newAnnotations = [...prev, newAnnotation].sort((a, b) => a.start - b.start)
+            onAnnotate(newAnnotations)
+            return newAnnotations
+          })
         }
         else if (action === 'resize') {
           const resized = currDrawnAnnotation.current.intersected
@@ -402,10 +411,12 @@ const
             resized.end = canvasUnitsToSeconds(resized.canvasEnd, canvasRef.current.width, duration)
           }
         }
-        onAnnotate(newAnnotation)
 
         currDrawnAnnotation.current = undefined
-        if (action === 'move' || action === 'resize') recalculateAnnotations()
+        if (action === 'move' || action === 'resize') {
+          recalculateAnnotations()
+          onAnnotate(annotations)
+        }
         redrawAnnotations()
       },
       init = React.useCallback((): U | undefined => {
@@ -419,7 +430,18 @@ const
         }
         // If canvas is not ready or didn't resize yet, try again later.
         if (!canvasRef.current || !isDefaultCanvasWidthFixed.current) return setTimeout(init, 300) as unknown as U
-      }, [recalculateAnnotations, redrawAnnotations])
+      }, [recalculateAnnotations, redrawAnnotations]),
+      reset = () => {
+        setAnnotations([])
+        onAnnotate([])
+      },
+      removeAnnotation = () => {
+        setAnnotations(prev => {
+          const newAnnotations = prev.filter(a => !a.isFocused)
+          onAnnotate(newAnnotations)
+          return newAnnotations
+        })
+      }
 
     React.useEffect(() => {
       window.addEventListener('resize', init)
@@ -429,10 +451,14 @@ const
     React.useEffect(() => {
       if (!isDefaultCanvasWidthFixed.current) return
       const focused = annotations.find(a => a.isFocused)
-      if (focused) focused.tag = activeTag
+      if (focused) {
+        const tagChanged = focused.tag !== activeTag
+        focused.tag = activeTag
+        if (tagChanged) onAnnotate(annotations)
+      }
       recalculateAnnotations()
       redrawAnnotations()
-    }, [activeTag, annotations, recalculateAnnotations, redrawAnnotations])
+    }, [activeTag, annotations, onAnnotate, recalculateAnnotations, redrawAnnotations])
 
     React.useEffect(() => {
       const timeout = init()
@@ -450,15 +476,36 @@ const
           <Fluent.Text variant='mediumPlus' block>{tooltipProps?.title}</Fluent.Text>
           <Fluent.Text variant='small'>{tooltipProps?.range}</Fluent.Text>
         </div>
-        <canvas
-          height={WAVEFORM_HEIGHT}
-          className={css.annotatorCanvas}
-          ref={canvasRef}
-          onMouseDown={onMouseDown}
-          onMouseMove={onMouseMove}
-          onMouseLeave={onMouseLeave}
-          onClick={onClick}
+        <Fluent.CommandBar styles={{ root: { padding: 0 } }} items={[
+          {
+            key: 'remove-all',
+            text: 'Remove all',
+            onClick: reset,
+            disabled: annotations.length === 0,
+            iconProps: { iconName: 'DependencyRemove', styles: { root: { fontSize: 20 } } },
+          },
+          {
+            key: 'remove',
+            text: 'Remove selected',
+            onClick: removeAnnotation,
+            disabled: annotations.every(a => !a.isFocused),
+            iconProps: { iconName: 'Delete', styles: { root: { fontSize: 20 } } },
+          },
+        ]}
         />
+
+        <div className={css.annotatorContainer}>
+          {children}
+          <canvas
+            height={WAVEFORM_HEIGHT}
+            className={css.annotatorCanvas}
+            ref={canvasRef}
+            onMouseDown={onMouseDown}
+            onMouseMove={onMouseMove}
+            onMouseLeave={onMouseLeave}
+            onClick={onClick}
+          />
+        </div>
       </>
     )
   }
@@ -469,10 +516,6 @@ declare global {
 // Shim for AudioContext in Safari.
 window.AudioContext = window.AudioContext || window.webkitAudioContext
 
-const itemsToAnnotations = (items?: AudioAnnotatorItem[]) => (items || []).map(i => (
-  { ...i, canvasHeight: 0, canvasY: 0, canvasStart: i.start, canvasEnd: i.end }
-))
-
 export const XAudioAnnotator = ({ model }: { model: AudioAnnotator }) => {
   const
     [activeTag, setActiveTag] = React.useState(model.tags[0]?.name),
@@ -480,25 +523,13 @@ export const XAudioAnnotator = ({ model }: { model: AudioAnnotator }) => {
     [isPlaying, setIsPlaying] = React.useState(false),
     [duration, setDuration] = React.useState(0),
     [currentTime, setCurrentTime] = React.useState(0),
-    [annotations, setAnnotations] = React.useState<DrawnAudioAnnotatorItem[]>(itemsToAnnotations(model.items)),
     [volumeIcon, setVolumeIcon] = React.useState('Volume3'),
     audioRef = React.useRef<HTMLAudioElement>(null),
     audioContextRef = React.useRef<AudioContext>(),
     gainNodeRef = React.useRef<GainNode>(),
     fetchedAudioUrlRef = React.useRef<S>(),
     audioPositionIntervalRef = React.useRef<U>(),
-    setWaveArgs = (annotations: DrawnAudioAnnotatorItem[]) => {
-      wave.args[model.name] = annotations.map(({ start, end, tag }) => ({ start, end, tag })) as unknown as Rec[]
-      if (model.trigger) wave.push()
-    },
-    activateTag = (tagName: S) => () => {
-      setActiveTag(tagName)
-      setAnnotations(prev => {
-        const newAnnotations = prev.map(a => { if (a.isFocused) a.tag = tagName; return a })
-        setWaveArgs(newAnnotations)
-        return newAnnotations
-      })
-    },
+    activateTag = (tagName: S) => () => setActiveTag(tagName),
     // TODO: Move to a separate service worker.
     getAudioData = async () => {
       if (!audioRef.current) return
@@ -574,29 +605,10 @@ export const XAudioAnnotator = ({ model }: { model: AudioAnnotator }) => {
       setCurrentTime(newTime)
       audioRef.current.currentTime = newTime
     },
-    onAnnotate = (newAnnotation?: DrawnAudioAnnotatorItem) => {
-      setAnnotations(prev => {
-        const newAnnotations = newAnnotation ? [...prev, newAnnotation] : prev
-        newAnnotations.sort((a, b) => a.start - b.start)
-        setWaveArgs(newAnnotations)
-        return newAnnotations
-      })
-    },
-    reset = () => {
-      setAnnotations([])
-      setWaveArgs([])
-    },
-    removeAnnotation = () => {
-      setAnnotations(prev => {
-        const newAnnotations = prev.filter(a => !a.isFocused)
-        setWaveArgs(newAnnotations)
-        return newAnnotations
-      })
-    },
-    focusAnnotation = (annotation: DrawnAudioAnnotatorItem) => {
-      if (annotation.tag !== activeTag) setActiveTag(annotation.tag)
-      setAnnotations(prev => prev.map(a => { a.isFocused = a === annotation; return a }))
-    }
+    onAnnotate = React.useCallback((newAnnotations: DrawnAudioAnnotatorItem[]) => {
+      wave.args[model.name] = newAnnotations.map(({ start, end, tag }) => ({ start, end, tag })) as unknown as Rec[]
+      if (model.trigger) wave.push()
+    }, [model.name, model.trigger])
 
   React.useEffect(() => {
     getAudioData()
@@ -616,36 +628,18 @@ export const XAudioAnnotator = ({ model }: { model: AudioAnnotator }) => {
         waveFormData ? (
           <>
             <AnnotatorTags tags={model.tags} activateTag={activateTag} activeTag={activeTag} />
-            <Fluent.CommandBar styles={{ root: { padding: 0 } }} items={[
-              {
-                key: 'remove-all',
-                text: 'Remove all',
-                onClick: reset,
-                disabled: annotations.length === 0,
-                iconProps: { iconName: 'DependencyRemove', styles: { root: { fontSize: 20 } } },
-              },
-              {
-                key: 'remove',
-                text: 'Remove selected',
-                onClick: removeAnnotation,
-                disabled: annotations.every(a => !a.isFocused),
-                iconProps: { iconName: 'Delete', styles: { root: { fontSize: 20 } } },
-              },
-            ]}
-            />
-            <div className={css.annotatorContainer}>
+            <RangeAnnotator
+              items={model.items}
+              onAnnotate={onAnnotate}
+              activeTag={activeTag}
+              tags={model.tags}
+              percentPlayed={currentTime / duration}
+              duration={duration}
+              skipToTime={skipToTime()}
+              setActiveTag={setActiveTag}
+            >
               <MicroBars data={waveFormData} value='val' category='cat' color='$themePrimary' zeroValue={0} />
-              <RangeAnnotator
-                annotations={annotations}
-                onAnnotate={onAnnotate}
-                activeTag={activeTag}
-                tags={model.tags}
-                percentPlayed={currentTime / duration}
-                duration={duration}
-                skipToTime={skipToTime()}
-                focusAnnotation={focusAnnotation}
-              />
-            </div>
+            </RangeAnnotator>
             <Fluent.Stack horizontal horizontalAlign='space-between' styles={{ root: { position: 'relative' } }}>
               <Fluent.Stack horizontal>
                 <Fluent.Icon iconName={volumeIcon} styles={{ root: { fontSize: 18 } }} />
@@ -673,14 +667,18 @@ export const XAudioAnnotator = ({ model }: { model: AudioAnnotator }) => {
                 <Fluent.IconButton
                   iconProps={{ iconName: 'PlayReverseResume' }}
                   // Nudge the icon 2px down to account for improper icon cropping.
-                  styles={{ icon: { fontSize: 18 }, root: { transform: 'rotate(180deg)', position: 'relative', top: 2 } }}
+                  styles={{ icon: { fontSize: 18 }, root: { transform: 'rotate(180deg)', marginTop: 2 } }}
                   onClick={skipToTime(duration)}
                 />
               </Fluent.Stack>
-              <div>{formatTime(currentTime)} / {formatTime(duration)}</div>
+              <span>{formatTime(currentTime)} / {formatTime(duration)}</span>
             </Fluent.Stack>
           </>
-        ) : <Fluent.Spinner size={Fluent.SpinnerSize.large} label='Loading audio annotator' />
+        ) : (
+          <Fluent.Stack horizontalAlign='center' verticalAlign='center' styles={{ root: { minHeight: BODY_MIN_HEGHT } }}>
+            <Fluent.Spinner size={Fluent.SpinnerSize.large} label='Loading audio annotator' />
+          </Fluent.Stack>
+        )
       }
     </div >
   )
