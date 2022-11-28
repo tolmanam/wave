@@ -213,8 +213,9 @@ const
       currDrawnAnnotation = React.useRef<DraggedAnnotation | undefined>(undefined),
       isDefaultCanvasWidthFixed = React.useRef(false),
       [tooltipProps, setTooltipProps] = React.useState<TooltipProps | null>(null),
-      // TODO: Refactor into ref instead of state.
-      [annotations, setAnnotations] = React.useState<DrawnAudioAnnotatorItem[]>(itemsToAnnotations(items)),
+      [removeAllDisabled, setRemoveAllDisabled] = React.useState(!items?.length),
+      [removeDisabled, setRemoveDisabled] = React.useState(true),
+      annotationsRef = React.useRef<DrawnAudioAnnotatorItem[]>(itemsToAnnotations(items)),
       theme = Fluent.useTheme(),
       colorsMap = React.useMemo(() => new Map<S, TagColor>(tags.map(tag => {
         const color = Fluent.getColorFromString(cssVarValue(tag.color))
@@ -226,77 +227,73 @@ const
         // eslint-disable-next-line react-hooks/exhaustive-deps
       })), [tags, theme]),
       recalculateAnnotations = React.useCallback((submit = false) => {
-        setAnnotations(prev => {
-          const mergedAnnotations: DrawnAudioAnnotatorItem[] = []
-          const visited = new Set()
-          for (let i = 0; i < prev.length; i++) {
-            const currAnnotation = prev[i]
-            if (visited.has(currAnnotation)) continue
-            mergedAnnotations.push(currAnnotation)
+        const annotations = annotationsRef.current
+        const mergedAnnotations: DrawnAudioAnnotatorItem[] = []
+        const visited = new Set()
+        for (let i = 0; i < annotations.length; i++) {
+          const currAnnotation = annotations[i]
+          if (visited.has(currAnnotation)) continue
+          mergedAnnotations.push(currAnnotation)
 
-            for (let j = i + 1; j < prev.length; j++) {
-              const nextAnnotation = prev[j]
-              if (currAnnotation.tag !== nextAnnotation.tag) continue
-              if (!isAnnotationIntersectingAtEnd(currAnnotation, nextAnnotation)) break
-              currAnnotation.end = Math.max(currAnnotation.end, nextAnnotation.end)
-              currAnnotation.canvasEnd = Math.max(currAnnotation.canvasEnd, nextAnnotation.canvasEnd)
-              visited.add(nextAnnotation)
-            }
+          for (let j = i + 1; j < annotations.length; j++) {
+            const nextAnnotation = annotations[j]
+            if (currAnnotation.tag !== nextAnnotation.tag) continue
+            if (!isAnnotationIntersectingAtEnd(currAnnotation, nextAnnotation)) break
+            currAnnotation.end = Math.max(currAnnotation.end, nextAnnotation.end)
+            currAnnotation.canvasEnd = Math.max(currAnnotation.canvasEnd, nextAnnotation.canvasEnd)
+            visited.add(nextAnnotation)
           }
+        }
 
-          let currMaxDepth = 1
-          for (let i = 0; i < mergedAnnotations.length; i++) {
-            const annotation = mergedAnnotations[i]
-            // TODO: Super ugly perf-wise.
-            const intersections = mergedAnnotations.filter(a => a !== annotation && isAnnotationIntersecting(a, annotation))
-            const bottomIntersections = intersections.filter(a => a !== annotation && a.canvasStart >= annotation.canvasStart && a.canvasStart <= annotation.canvasEnd).length
-            const maxDepth = getMaxDepth(mergedAnnotations, i, annotation, 1)
-            const shouldFillRemainingSpace = !bottomIntersections || maxDepth < currMaxDepth
-            currMaxDepth = intersections.length ? Math.max(currMaxDepth, maxDepth) : 1
+        let currMaxDepth = 1
+        for (let i = 0; i < mergedAnnotations.length; i++) {
+          const annotation = mergedAnnotations[i]
+          // TODO: Super ugly perf-wise.
+          const intersections = mergedAnnotations.filter(a => a !== annotation && isAnnotationIntersecting(a, annotation))
+          const bottomIntersections = intersections.filter(a => a !== annotation && a.canvasStart >= annotation.canvasStart && a.canvasStart <= annotation.canvasEnd).length
+          const maxDepth = getMaxDepth(mergedAnnotations, i, annotation, 1)
+          const shouldFillRemainingSpace = !bottomIntersections || maxDepth < currMaxDepth
+          currMaxDepth = intersections.length ? Math.max(currMaxDepth, maxDepth) : 1
 
-            const { canvasY, canvasHeight } = getCanvasDimensions(intersections, annotation, shouldFillRemainingSpace ? 0 : maxDepth)
-            annotation.canvasY = canvasY
-            annotation.canvasHeight = canvasHeight
-          }
-          if (submit) onAnnotate(mergedAnnotations)
-          return mergedAnnotations
-        })
+          const { canvasY, canvasHeight } = getCanvasDimensions(intersections, annotation, shouldFillRemainingSpace ? 0 : maxDepth)
+          annotation.canvasY = canvasY
+          annotation.canvasHeight = canvasHeight
+        }
+        if (submit) onAnnotate(mergedAnnotations)
+        annotationsRef.current = mergedAnnotations
       }, [onAnnotate]),
       redrawAnnotations = React.useCallback(() => {
-        setAnnotations(annotations => {
-          const canvas = canvasRef.current
-          const ctx = ctxRef.current
-          if (!ctx || !canvas) return annotations
-          ctx.clearRect(0, 0, canvas.width, canvas.height)
-          annotations.forEach(({ canvasStart, canvasEnd, tag, canvasHeight, canvasY, isFocused }) => {
-            ctx.fillStyle = colorsMap.get(tag)?.transparent || 'red'
-            ctx.fillRect(canvasStart, canvasY, canvasEnd - canvasStart, canvasHeight)
-            if (isFocused) {
-              ctx.strokeStyle = colorsMap.get(tag)?.color || 'red'
-              ctx.lineWidth = 3
-              ctx.strokeRect(canvasStart, canvasY, canvasEnd - canvasStart, canvasHeight)
-            }
-          })
-
-          if (currDrawnAnnotation.current && currDrawnAnnotation.current.action === 'new') {
-            const { from, to } = currDrawnAnnotation.current
-            ctx.fillStyle = colorsMap.get(activeTag)?.transparent || 'red'
-            ctx.fillRect(from, 0, to - from, WAVEFORM_HEIGHT)
+        const canvas = canvasRef.current
+        const ctx = ctxRef.current
+        if (!ctx || !canvas) return
+        ctx.clearRect(0, 0, canvas.width, canvas.height)
+        annotationsRef.current.forEach(({ canvasStart, canvasEnd, tag, canvasHeight, canvasY, isFocused }) => {
+          ctx.fillStyle = colorsMap.get(tag)?.transparent || 'red'
+          ctx.fillRect(canvasStart, canvasY, canvasEnd - canvasStart, canvasHeight)
+          if (isFocused) {
+            ctx.strokeStyle = colorsMap.get(tag)?.color || 'red'
+            ctx.lineWidth = 3
+            ctx.strokeRect(canvasStart, canvasY, canvasEnd - canvasStart, canvasHeight)
           }
-
-          // Draw track.
-          const trackPosition = percentPlayed === 1 ? canvas.width - TRACK_WIDTH : canvas.width * percentPlayed
-          ctx.fillStyle = cssVarValue('$themeDark')
-          ctx.fillRect(trackPosition, 0, TRACK_WIDTH, WAVEFORM_HEIGHT)
-          return annotations
         })
+
+        if (currDrawnAnnotation.current && currDrawnAnnotation.current.action === 'new') {
+          const { from, to } = currDrawnAnnotation.current
+          ctx.fillStyle = colorsMap.get(activeTag)?.transparent || 'red'
+          ctx.fillRect(from, 0, to - from, WAVEFORM_HEIGHT)
+        }
+
+        // Draw track.
+        const trackPosition = percentPlayed === 1 ? canvas.width - TRACK_WIDTH : canvas.width * percentPlayed
+        ctx.fillStyle = cssVarValue('$themeDark')
+        ctx.fillRect(trackPosition, 0, TRACK_WIDTH, WAVEFORM_HEIGHT)
       }, [activeTag, colorsMap, percentPlayed]),
       onMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
         if (e.buttons !== 1) return // Accept left-click only.
         const canvas = canvasRef.current
         if (!canvas) return
         const { cursor_x, cursor_y } = eventToCursor(e, canvas.getBoundingClientRect())
-        const intersected = getIntersectedAnnotation(annotations, cursor_x, cursor_y)
+        const intersected = getIntersectedAnnotation(annotationsRef.current, cursor_x, cursor_y)
         const resized = getIntersectingEdge(cursor_x, intersected)
         const action = intersected?.isFocused ? (resized && 'resize') || 'move' : undefined
         currDrawnAnnotation.current = { from: cursor_x, to: cursor_x, action, intersected, resized }
@@ -308,7 +305,7 @@ const
 
         const canvasWidth = canvasRef.current.width
         const { cursor_x, cursor_y } = eventToCursor(e, canvas.getBoundingClientRect())
-        const intersected = getIntersectedAnnotation(annotations, cursor_x, cursor_y)
+        const intersected = getIntersectedAnnotation(annotationsRef.current, cursor_x, cursor_y)
         setTooltipProps(!intersected ? null : {
           title: colorsMap.get(intersected.tag)?.label || '',
           range: `${formatTime(intersected.start)} - ${formatTime(intersected.end)}`,
@@ -396,12 +393,13 @@ const
 
         const action = currDrawnAnnotation.current?.action
         if (!action || action === 'new') {
-          annotations.forEach(a => a.isFocused = false)
+          annotationsRef.current.forEach(a => a.isFocused = false)
+          setRemoveDisabled(true)
           redrawAnnotations()
         }
 
         const { cursor_x, cursor_y } = eventToCursor(e, canvas.getBoundingClientRect())
-        const intersected = getIntersectedAnnotation(annotations, cursor_x, cursor_y)
+        const intersected = getIntersectedAnnotation(annotationsRef.current, cursor_x, cursor_y)
 
         canvas.style.cursor = intersected
           ? getIntersectingEdge(cursor_x, intersected) ? 'ew-resize' : 'move'
@@ -409,7 +407,12 @@ const
 
         if (!currDrawnAnnotation.current || !action) {
           if (intersected && intersected.tag !== activeTag) setActiveTag(intersected.tag)
-          intersected ? setAnnotations(prev => prev.map(a => { a.isFocused = a === intersected; return a })) : skipToTime(e)
+          if (intersected) {
+            annotationsRef.current.forEach(a => a.isFocused = a === intersected)
+            setRemoveDisabled(false)
+          } else {
+            skipToTime(e)
+          }
           redrawAnnotations()
           return
         }
@@ -418,9 +421,10 @@ const
           const { from, to } = currDrawnAnnotation.current
           const annotationWidth = Math.abs(from - to)
           if (annotationWidth < MIN_ANNOTATION_WIDTH) return
-          const newAnnotation = createAnnotation(from, to, activeTag, canvasRef.current.width, duration)
-          setAnnotations(prev => [...prev, newAnnotation].sort((a, b) => a.start - b.start))
+          annotationsRef.current.push(createAnnotation(from, to, activeTag, canvasRef.current.width, duration))
+          annotationsRef.current.sort((a, b) => a.start - b.start)
           recalculateAnnotations(true)
+          setRemoveAllDisabled(false)
         }
         else if (action === 'resize') {
           const resized = currDrawnAnnotation.current.intersected
@@ -450,12 +454,16 @@ const
         if (!canvasRef.current || !isDefaultCanvasWidthFixed.current) return setTimeout(init, 300) as unknown as U
       }, [recalculateAnnotations, redrawAnnotations]),
       reset = () => {
-        setAnnotations([])
+        annotationsRef.current = []
         onAnnotate([])
         redrawAnnotations()
+        setRemoveDisabled(true)
+        setRemoveAllDisabled(true)
       },
       removeAnnotation = () => {
-        setAnnotations(prev => prev.filter(a => !a.isFocused))
+        annotationsRef.current = annotationsRef.current.filter(a => !a.isFocused)
+        setRemoveAllDisabled(annotationsRef.current.length === 0)
+        setRemoveDisabled(true)
         recalculateAnnotations(true)
         redrawAnnotations()
       }
@@ -467,11 +475,11 @@ const
 
     React.useEffect(() => {
       if (!isDefaultCanvasWidthFixed.current) return
-      const focused = annotations.find(a => a.isFocused)
+      const focused = annotationsRef.current.find(a => a.isFocused)
       if (focused) {
         const tagChanged = focused.tag !== activeTag
         focused.tag = activeTag
-        if (tagChanged) onAnnotate(annotations)
+        if (tagChanged) onAnnotate(annotationsRef.current)
       }
       recalculateAnnotations()
       redrawAnnotations()
@@ -499,14 +507,14 @@ const
             key: 'remove-all',
             text: 'Remove all',
             onClick: reset,
-            disabled: annotations.length === 0,
+            disabled: removeAllDisabled,
             iconProps: { iconName: 'DependencyRemove', styles: { root: { fontSize: 20 } } },
           },
           {
             key: 'remove',
             text: 'Remove selected',
             onClick: removeAnnotation,
-            disabled: annotations.every(a => !a.isFocused),
+            disabled: removeDisabled,
             iconProps: { iconName: 'Delete', styles: { root: { fontSize: 20 } } },
           },
         ]}
