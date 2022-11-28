@@ -541,4 +541,56 @@ describe('AudioAnnotator.tsx', () => {
       expect(pushMock).toHaveBeenCalledTimes(1)
     })
   })
+  describe('Annotations - merge / union', () => {
+
+    it('Merges annotation if intersecting and exceeding from start', async () => {
+      const { container, getByText } = render(<XAudioAnnotator model={model} />)
+      await waitForComponentLoad()
+      fireEvent.click(getByText('Tag 2'))
+      const canvasEl = container.querySelector('canvas')!
+      fireEvent.mouseDown(canvasEl, { clientX: 50, clientY: 0, buttons: 1 })
+      fireEvent.mouseMove(canvasEl, { clientX: 70, clientY: 0, buttons: 1 })
+      fireEvent.click(canvasEl, { clientX: 70, clientY: 0, buttons: 1 })
+
+      expect(wave.args[name]).toHaveLength(2)
+      expect(wave.args[name]).toMatchObject([items[0], { ...items[1], start: 50 }])
+    })
+
+    it('Merges annotation if intersecting and exceeding from end', async () => {
+      const { container } = render(<XAudioAnnotator model={model} />)
+      await waitForComponentLoad()
+      const canvasEl = container.querySelector('canvas')!
+      fireEvent.mouseDown(canvasEl, { clientX: 10, clientY: 0, buttons: 1 })
+      fireEvent.mouseMove(canvasEl, { clientX: 30, clientY: 0, buttons: 1 })
+      fireEvent.click(canvasEl, { clientX: 30, clientY: 0, buttons: 1 })
+
+      expect(wave.args[name]).toHaveLength(2)
+      expect(wave.args[name]).toMatchObject([{ ...items[0], end: 30 }, items[1]])
+    })
+
+    it('Merges annotations when intersecting with both ends', async () => {
+      const { container } = render(<XAudioAnnotator model={model} />)
+      await waitForComponentLoad()
+      const canvasEl = container.querySelector('canvas')!
+      fireEvent.mouseDown(canvasEl, { clientX: 10, clientY: 0, buttons: 1 })
+      fireEvent.mouseMove(canvasEl, { clientX: 15, clientY: 0, buttons: 1 })
+      fireEvent.click(canvasEl, { clientX: 15, clientY: 0, buttons: 1 })
+
+      expect(wave.args[name]).toHaveLength(2)
+      expect(wave.args[name]).toMatchObject(items)
+    })
+
+    it('Does not merge if intersecting with different tag', async () => {
+      const { container } = render(<XAudioAnnotator model={model} />)
+      await waitForComponentLoad()
+      const canvasEl = container.querySelector('canvas')!
+      fireEvent.mouseDown(canvasEl, { clientX: 50, clientY: 0, buttons: 1 })
+      fireEvent.mouseMove(canvasEl, { clientX: 70, clientY: 0, buttons: 1 })
+      fireEvent.click(canvasEl, { clientX: 70, clientY: 0, buttons: 1 })
+
+      expect(wave.args[name]).toHaveLength(3)
+      expect(wave.args[name]).toMatchObject([items[0], { start: 50, end: 70, tag: 'tag1' }, items[1]])
+    })
+
+  })
 })
