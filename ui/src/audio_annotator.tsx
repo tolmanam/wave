@@ -50,7 +50,7 @@ export interface AudioAnnotator {
 }
 
 type RangeAnnotator = {
-  onAnnotate: (annotations: DrawnAudioAnnotatorItem[]) => void
+  onAnnotate: (annotations: DrawnAnnotation[]) => void
   activeTag: S
   tags: AudioAnnotatorTag[]
   percentPlayed: F
@@ -59,7 +59,7 @@ type RangeAnnotator = {
   setActiveTag: (tag: S) => void
   items?: AudioAnnotatorItem[]
 }
-type DrawnAudioAnnotatorItem = AudioAnnotatorItem & {
+type DrawnAnnotation = AudioAnnotatorItem & {
   canvasStart: F
   canvasEnd: F
   canvasHeight: U
@@ -71,7 +71,7 @@ type DraggedAnnotation = {
   to: U
   action?: 'resize' | 'move' | 'new'
   resized?: 'from' | 'to'
-  intersected?: DrawnAudioAnnotatorItem
+  intersected?: DrawnAnnotation
 }
 type TooltipProps = { title: S, range: S, top: U, left: U }
 type TagColor = { transparent: S, color: S, label: S }
@@ -145,7 +145,7 @@ const
       .filter((v, i) => v !== "00" || i > 0)
       .join(":")
   },
-  getIntersectingEdge = (x: U, intersected?: DrawnAudioAnnotatorItem) => {
+  getIntersectingEdge = (x: U, intersected?: DrawnAnnotation) => {
     if (!intersected) return
     const { canvasStart, canvasEnd } = intersected
     if (Math.abs(canvasStart - x) <= ANNOTATION_HANDLE_OFFSET) return 'from'
@@ -163,26 +163,26 @@ const
       ? cursorX - TOOLTIP_WIDTH - LEFT_TOOLTIP_OFFSET
       : cursorX + LEFT_TOOLTIP_OFFSET
   },
-  isAnnotationIntersectingAtEnd = (a1: DrawnAudioAnnotatorItem, a2: DrawnAudioAnnotatorItem) => {
+  isAnnotationIntersectingAtEnd = (a1: DrawnAnnotation, a2: DrawnAnnotation) => {
     return a2.canvasStart >= a1.canvasStart && a2.canvasStart <= a1.canvasEnd
   },
-  isAnnotationIntersecting = (a1: DrawnAudioAnnotatorItem, a2: DrawnAudioAnnotatorItem) => {
+  isAnnotationIntersecting = (a1: DrawnAnnotation, a2: DrawnAnnotation) => {
     const { start: start1, end: end1 } = a1
     const { start: start2, end: end2 } = a2
     return (start2 >= start1 && start2 <= end1) || (start1 >= start2 && start1 <= end2)
   },
   canvasUnitsToSeconds = (canvasUnit: F, canvasWidth: F, duration: F) => +(canvasUnit / canvasWidth * duration).toFixed(2),
-  createAnnotation = (from: U, to: U, tag: S, canvasWidth: F, duration: F): DrawnAudioAnnotatorItem => {
+  createAnnotation = (from: U, to: U, tag: S, canvasWidth: F, duration: F): DrawnAnnotation => {
     const canvasStart = Math.min(from, to)
     const canvasEnd = Math.max(from, to)
     const start = canvasUnitsToSeconds(from, canvasWidth, duration)
     const end = canvasUnitsToSeconds(to, canvasWidth, duration)
     return { canvasStart, canvasEnd, start, end, tag, canvasHeight: WAVEFORM_HEIGHT, canvasY: 0 }
   },
-  getIntersectedAnnotation = (annotations: DrawnAudioAnnotatorItem[], x: U, y: U) => {
+  getIntersectedAnnotation = (annotations: DrawnAnnotation[], x: U, y: U) => {
     return annotations.find(a => isIntersectingRect(x, y, { x1: a.canvasStart, x2: a.canvasEnd, y1: a.canvasY, y2: a.canvasHeight + a.canvasY }))
   },
-  getCanvasDimensions = (intersections: DrawnAudioAnnotatorItem[], annotation: DrawnAudioAnnotatorItem, maxDepth?: U) => {
+  getCanvasDimensions = (intersections: DrawnAnnotation[], annotation: DrawnAnnotation, maxDepth?: U) => {
     const verticalIntersections = intersections
       .filter(a => a !== annotation && annotation.canvasStart >= a.canvasStart && annotation.canvasStart <= a.canvasEnd)
       .sort((a, b) => a.canvasY - b.canvasY)
@@ -197,7 +197,7 @@ const
       : Math.abs(canvasY - (verticalIntersections[j]?.canvasY || WAVEFORM_HEIGHT))
     return { canvasY, canvasHeight }
   },
-  getMaxDepth = (annotations: DrawnAudioAnnotatorItem[], idx: U, annotation: DrawnAudioAnnotatorItem, currMax: U) => {
+  getMaxDepth = (annotations: DrawnAnnotation[], idx: U, annotation: DrawnAnnotation, currMax: U) => {
     // TODO: Super ugly perf-wise.
     let currmax = annotations.filter(a => annotation.canvasStart >= a.canvasStart && annotation.canvasStart <= a.canvasEnd).length
     for (let j = idx + 1; annotations[j]?.canvasStart >= annotation?.canvasStart && annotations[j]?.canvasStart <= annotation?.canvasEnd; j++) {
@@ -215,7 +215,7 @@ const
       [tooltipProps, setTooltipProps] = React.useState<TooltipProps | null>(null),
       [removeAllDisabled, setRemoveAllDisabled] = React.useState(!items?.length),
       [removeDisabled, setRemoveDisabled] = React.useState(true),
-      annotationsRef = React.useRef<DrawnAudioAnnotatorItem[]>(itemsToAnnotations(items)),
+      annotationsRef = React.useRef<DrawnAnnotation[]>(itemsToAnnotations(items)),
       theme = Fluent.useTheme(),
       colorsMap = React.useMemo(() => new Map<S, TagColor>(tags.map(tag => {
         const color = Fluent.getColorFromString(cssVarValue(tag.color))
@@ -228,7 +228,7 @@ const
       })), [tags, theme]),
       recalculateAnnotations = React.useCallback((submit = false) => {
         const annotations = annotationsRef.current
-        const mergedAnnotations: DrawnAudioAnnotatorItem[] = []
+        const mergedAnnotations: DrawnAnnotation[] = []
         const visited = new Set()
         for (let i = 0; i < annotations.length; i++) {
           const currAnnotation = annotations[i]
@@ -631,7 +631,7 @@ export const XAudioAnnotator = ({ model }: { model: AudioAnnotator }) => {
       setCurrentTime(newTime)
       audioRef.current.currentTime = newTime
     },
-    onAnnotate = React.useCallback((newAnnotations: DrawnAudioAnnotatorItem[]) => {
+    onAnnotate = React.useCallback((newAnnotations: DrawnAnnotation[]) => {
       wave.args[model.name] = newAnnotations.map(({ start, end, tag }) => ({ start, end, tag })) as unknown as Rec[]
       if (model.trigger) wave.push()
     }, [model.name, model.trigger])
