@@ -55,9 +55,9 @@ type RangeAnnotator = {
   tags: AudioAnnotatorTag[]
   percentPlayed: F
   duration: F
-  skipToTime: (e: React.MouseEvent<HTMLCanvasElement>) => void
   setActiveTag: (tag: S) => void
   items?: AudioAnnotatorItem[]
+  onRenderToolbar?: () => JSX.Element
 }
 type DrawnAnnotation = AudioAnnotatorItem & {
   canvasStart: F
@@ -204,8 +204,9 @@ const
     return currmax
   },
   itemsToAnnotations = (items?: AudioAnnotatorItem[]) => (items || []).map(i => ({ ...i, canvasHeight: 0, canvasY: 0, canvasStart: i.start, canvasEnd: i.end })),
-  RangeAnnotator = ({ onAnnotate, activeTag, tags, percentPlayed, skipToTime, items, duration, setActiveTag, children }: React.PropsWithChildren<RangeAnnotator>) => {
+  RangeAnnotator = (props: React.PropsWithChildren<RangeAnnotator>) => {
     const
+      { onAnnotate, activeTag, tags, percentPlayed, items, duration, setActiveTag, children, onRenderToolbar } = props,
       canvasRef = React.useRef<HTMLCanvasElement>(null),
       ctxRef = React.useRef<CanvasRenderingContext2D | null>(null),
       currDrawnAnnotation = React.useRef<DraggedAnnotation | undefined>(undefined),
@@ -291,7 +292,7 @@ const
         // Draw track.
         const trackPosition = percentPlayed === 1 ? canvas.width - TRACK_WIDTH : canvas.width * percentPlayed
         ctx.fillStyle = cssVarValue('$themeDark')
-        ctx.fillRect(trackPosition, 0, TRACK_WIDTH, WAVEFORM_HEIGHT)
+        ctx.fillRect(trackPosition - (TRACK_WIDTH / 2), 0, TRACK_WIDTH, WAVEFORM_HEIGHT)
       }, [activeTag, colorsMap, percentPlayed]),
       onMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
         if (e.buttons !== 1) return // Accept left-click only.
@@ -415,8 +416,6 @@ const
           if (intersected) {
             annotationsRef.current.forEach(a => a.isFocused = a === intersected)
             setRemoveDisabled(false)
-          } else {
-            skipToTime(e)
           }
           redrawAnnotations()
           return
@@ -507,24 +506,26 @@ const
           <Fluent.Text variant='mediumPlus' block>{tooltipProps?.title}</Fluent.Text>
           <Fluent.Text variant='small'>{tooltipProps?.range}</Fluent.Text>
         </div>
-        <Fluent.CommandBar styles={{ root: { padding: 0 } }} items={[
-          {
-            key: 'remove-all',
-            text: 'Remove all',
-            onClick: reset,
-            disabled: removeAllDisabled,
-            iconProps: { iconName: 'DependencyRemove', styles: { root: { fontSize: 20 } } },
-          },
-          {
-            key: 'remove',
-            text: 'Remove selected',
-            onClick: removeAnnotation,
-            disabled: removeDisabled,
-            iconProps: { iconName: 'Delete', styles: { root: { fontSize: 20 } } },
-          },
-        ]}
-        />
-
+        <Fluent.Stack horizontal horizontalAlign='space-between' verticalAlign='center'>
+          <Fluent.CommandBar styles={{ root: { padding: 0, minWidth: 280 } }} items={[
+            {
+              key: 'remove-all',
+              text: 'Remove all',
+              onClick: reset,
+              disabled: removeAllDisabled,
+              iconProps: { iconName: 'DependencyRemove', styles: { root: { fontSize: 20 } } },
+            },
+            {
+              key: 'remove',
+              text: 'Remove selected',
+              onClick: removeAnnotation,
+              disabled: removeDisabled,
+              iconProps: { iconName: 'Delete', styles: { root: { fontSize: 20 } } },
+            },
+          ]}
+          />
+          {onRenderToolbar && onRenderToolbar()}
+        </Fluent.Stack>
         <div className={css.annotatorContainer}>
           {children}
           <canvas
@@ -537,6 +538,10 @@ const
             onClick={onClick}
           />
         </div>
+        <Fluent.Stack horizontal horizontalAlign='space-between' styles={{ root: { marginTop: 8 } }}>
+          <div>{formatTime(0)}</div>
+          <div>{formatTime(duration)}</div>
+        </Fluent.Stack>
       </>
     )
   }
@@ -622,7 +627,10 @@ export const XAudioAnnotator = ({ model }: { model: AudioAnnotator }) => {
       setIsPlaying(false)
       if (audioPositionIntervalRef.current) window.clearInterval(audioPositionIntervalRef.current)
     },
-    onVolumeChange = (v: U) => {
+    onTrackChange = (value: F, _range?: [F, F], e?: unknown) => {
+      skipToTime(value)(e as any)
+    },
+    onVolumeChange = (v: F) => {
       if (gainNodeRef.current) gainNodeRef.current.gain.value = v
       setVolumeIcon(v === 0 ? 'VolumeDisabled' : (v < 0.3 ? 'Volume1' : (v < 0.75 ? 'Volume2' : 'Volume3')))
     },
@@ -666,25 +674,41 @@ export const XAudioAnnotator = ({ model }: { model: AudioAnnotator }) => {
               tags={model.tags}
               percentPlayed={currentTime / duration}
               duration={duration}
-              skipToTime={skipToTime()}
               setActiveTag={setActiveTag}
+              onRenderToolbar={() => (
+                <Fluent.Stack horizontal>
+                  <Fluent.Icon iconName={volumeIcon} styles={{ root: { fontSize: 18 } }} />
+                  <Fluent.Slider
+                    styles={{ root: { minWidth: 180 } }}
+                    defaultValue={1}
+                    max={2}
+                    step={0.01}
+                    onChange={onVolumeChange}
+                    showValue={false}
+                  />
+                  <Fluent.Icon iconName='PlaybackRate1x' styles={{ root: { marginTop: 3, marginLeft: 6, fontSize: 18 } }} />
+                  <Fluent.Dropdown
+                    title='Playback speed'
+                    styles={{ title: { border: 'none', }, dropdown: { selectors: { ':focus::after': { border: 'none' } }, minWidth: 70 } }}
+                    defaultSelectedKey={audioRef?.current?.playbackRate || 1}
+                    options={speedAdjustmentOptions}
+                    onChange={(_ev, option) => onSpeedChange(option!.key as U)}
+                  />
+                </Fluent.Stack>
+              )}
             >
               <MicroBars data={waveFormData} value='val' category='cat' color='$themePrimary' zeroValue={0} />
             </RangeAnnotator>
-            <Fluent.Stack horizontal horizontalAlign='space-between' styles={{ root: { position: 'relative' } }}>
-              <Fluent.Stack horizontal>
-                <Fluent.Icon iconName={volumeIcon} styles={{ root: { fontSize: 18 } }} />
-                <Fluent.Slider styles={{ root: { minWidth: 180 } }} min={0} defaultValue={1} max={2} step={0.01} onChange={onVolumeChange} valueFormat={v => `${Math.round(v * 100)}%`} />
-                <Fluent.Icon iconName={'PlaybackRate1x'} styles={{ root: { marginTop: 3, marginLeft: 6, fontSize: 18 } }} />
-                <Fluent.Dropdown
-                  title='Playback speed'
-                  styles={{ title: { border: 'none', }, dropdown: { selectors: { ':focus::after': { border: 'none' } }, minWidth: 70 } }}
-                  defaultSelectedKey={audioRef?.current?.playbackRate || 1}
-                  options={speedAdjustmentOptions}
-                  onChange={(_ev, option) => onSpeedChange(option!.key as U)}
-                />
-              </Fluent.Stack>
-              <Fluent.Stack horizontal styles={{ root: { position: 'absolute', left: '50%', transform: 'translateX(-50%)', marginTop: 15 } }}>
+            <Fluent.Slider
+              styles={{ root: { minWidth: 180 }, slideBox: { padding: 0 } }}
+              value={currentTime}
+              max={duration}
+              step={0.01}
+              onChange={onTrackChange}
+              showValue={false}
+            />
+            <div style={{ position: 'relative' }}>
+              <Fluent.Stack horizontal styles={{ root: { position: 'absolute', left: '50%', transform: 'translateX(-50%)', marginTop: 25 } }}>
                 <Fluent.IconButton iconProps={{ iconName: 'PlayReverseResume' }} styles={{ icon: { fontSize: 18 } }} onClick={skipToTime(0)} />
                 <Fluent.IconButton
                   iconProps={{ iconName: isPlaying ? 'Pause' : 'PlaySolid' }}
@@ -696,14 +720,13 @@ export const XAudioAnnotator = ({ model }: { model: AudioAnnotator }) => {
                   }}
                 />
                 <Fluent.IconButton
-                  iconProps={{ iconName: 'PlayReverseResume' }}
-                  // Nudge the icon down to account for improper icon cropping.
-                  styles={{ icon: { fontSize: 18 }, root: { transform: 'rotate(180deg)', marginTop: 3 } }}
+                  iconProps={{ iconName: 'PlayResume' }}
+                  styles={{ icon: { fontSize: 18 } }}
                   onClick={skipToTime(duration)}
                 />
               </Fluent.Stack>
-              <span>{formatTime(currentTime)} / {formatTime(duration)}</span>
-            </Fluent.Stack>
+              <div style={{ textAlign: 'center' }}>{formatTime(currentTime)} </div>
+            </div>
           </>
         ) : (
           <Fluent.Stack horizontalAlign='center' verticalAlign='center' styles={{ root: { minHeight: BODY_MIN_HEGHT } }}>
