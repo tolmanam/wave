@@ -163,13 +163,11 @@ const
       ? cursorX - TOOLTIP_WIDTH - LEFT_TOOLTIP_OFFSET
       : cursorX + LEFT_TOOLTIP_OFFSET
   },
-  isAnnotationIntersectingAtEnd = (a1: DrawnAnnotation, a2: DrawnAnnotation) => {
-    return a2.canvasStart >= a1.canvasStart && a2.canvasStart <= a1.canvasEnd
+  isAnnotationIntersectingAtEnd = (a1?: DrawnAnnotation, a2?: DrawnAnnotation) => {
+    return a1 && a2 && a2.canvasStart >= a1.canvasStart && a2.canvasStart <= a1.canvasEnd
   },
-  isAnnotationIntersecting = (a1: DrawnAnnotation, a2: DrawnAnnotation) => {
-    const { start: start1, end: end1 } = a1
-    const { start: start2, end: end2 } = a2
-    return (start2 >= start1 && start2 <= end1) || (start1 >= start2 && start1 <= end2)
+  isAnnotationIntersectingAtStart = (a1?: DrawnAnnotation, a2?: DrawnAnnotation) => {
+    return a1 && a2 && a1.canvasEnd >= a2.canvasStart && a1.canvasEnd <= a2.canvasEnd
   },
   canvasUnitsToSeconds = (canvasUnit: F, canvasWidth: F, duration: F) => +(canvasUnit / canvasWidth * duration).toFixed(2),
   createAnnotation = (from: U, to: U, tag: S, canvasWidth: F, duration: F): DrawnAnnotation => {
@@ -184,7 +182,7 @@ const
   },
   getCanvasDimensions = (intersections: DrawnAnnotation[], annotation: DrawnAnnotation, maxDepth?: U) => {
     const verticalIntersections = intersections
-      .filter(a => a !== annotation && annotation.canvasStart >= a.canvasStart && annotation.canvasStart <= a.canvasEnd)
+      .filter(a => a !== annotation && isAnnotationIntersectingAtEnd(a, annotation))
       .sort((a, b) => a.canvasY - b.canvasY)
     let canvasY = 0
     let j = 0
@@ -248,11 +246,18 @@ const
         let currMaxDepth = 1
         for (let i = 0; i < mergedAnnotations.length; i++) {
           const annotation = mergedAnnotations[i]
-          // TODO: Super ugly perf-wise.
-          const intersections = mergedAnnotations.filter(a => a !== annotation && isAnnotationIntersecting(a, annotation))
-          const bottomIntersections = intersections.filter(a => a !== annotation && a.canvasStart >= annotation.canvasStart && a.canvasStart <= annotation.canvasEnd).length
+          const nextIntersections = []
+          const prevIntersections = []
+          for (let j = i - 1; isAnnotationIntersectingAtStart(mergedAnnotations[j], annotation); j--) {
+            prevIntersections.push(mergedAnnotations[j])
+          }
+          for (let j = i + 1; isAnnotationIntersectingAtEnd(annotation, mergedAnnotations[j]); j++) {
+            nextIntersections.push(mergedAnnotations[j])
+          }
+
+          const intersections = [...prevIntersections, ...nextIntersections]
           const maxDepth = getMaxDepth(mergedAnnotations, i, annotation, 1)
-          const shouldFillRemainingSpace = !bottomIntersections || maxDepth < currMaxDepth
+          const shouldFillRemainingSpace = !nextIntersections.length || maxDepth < currMaxDepth
           currMaxDepth = intersections.length ? Math.max(currMaxDepth, maxDepth) : 1
 
           const { canvasY, canvasHeight } = getCanvasDimensions(intersections, annotation, shouldFillRemainingSpace ? 0 : maxDepth)
